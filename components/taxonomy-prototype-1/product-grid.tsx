@@ -16,6 +16,8 @@ export function ProductGrid({ products, totalCount }: ProductGridProps) {
           const imageUrl =
             product.defaultImageUrl || product.images?.default?.url || "/placeholder.svg?height=150&width=150"
           console.log(`Loading image for Product ${product.title}: ${imageUrl}`)
+          const offerText = product.promotions?.[0]?.offerText // Get offerText
+
           return (
             <Card key={product.id} className="flex flex-col border-0 shadow-none">
               {" "}
@@ -30,6 +32,11 @@ export function ProductGrid({ products, totalCount }: ProductGridProps) {
                 />
                 <p className="text-center text-sm font-medium line-clamp-2 mb-1">{product.title}</p>
                 <p className="text-center text-base font-bold text-green-700">£{product.price.price.toFixed(2)}</p>
+                {offerText && (
+                  <div className="mt-2 px-2 py-1 bg-yellow-400 text-black text-xs font-semibold rounded-sm text-center w-full">
+                    {offerText}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )

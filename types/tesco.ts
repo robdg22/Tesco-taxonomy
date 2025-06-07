@@ -43,6 +43,12 @@ export interface ProductPrice {
   unitOfMeasure: string
 }
 
+// New interfaces for promotions
+export interface Promotion {
+  offerText: string
+  // Add other promotion fields if needed in the future
+}
+
 export interface ProductItem {
   id: string
   baseProductId: string
@@ -60,6 +66,7 @@ export interface ProductItem {
   aisleName: string
   shelfId: string
   shelfName: string
+  promotions?: Promotion[] // Added promotions field
 }
 
 export interface PageInformation {
@@ -75,4 +82,9 @@ export interface GetCategoryProductsResponse {
     pageInformation: PageInformation
     productItems: ProductItem[]
   }
+}
+
+export interface FilterInput {
+  field: string
+  values: string[]
 }

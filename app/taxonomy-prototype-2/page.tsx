@@ -2,27 +2,32 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { graphqlRequest } from "@/lib/graphql-client"
-import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco"
+import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco" // Removed FilterInput import
 import { SuperDepartmentGrid } from "@/components/taxonomy-prototype-2/super-department-grid"
 import { DepartmentTabs } from "@/components/taxonomy-prototype-2/department-tabs"
 import { DepartmentTabsContent } from "@/components/taxonomy-prototype-2/department-tabs-content"
-import { ProductGrid } from "@/components/taxonomy-prototype-2/product-grid"
 import { NavigationHeader } from "@/components/taxonomy-prototype-2/navigation-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { AisleProductListingWithTabs } from "@/components/taxonomy-prototype-2/aisle-product-listing-with-tabs"
-import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-tabs" // New import
+import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-tabs"
+import { Button } from "@/components/ui/button" // Import Button for special offers
 
-type NavigationLevel = "superDepartmentGrid" | "departmentTabs" | "aisleProductsWithTabs" | "shelfProducts"
+type NavigationLevel =
+  | "superDepartmentGrid"
+  | "departmentTabs"
+  | "aisleProductsWithTabs"
+  | "shelfProducts"
+  | "offersProducts" // Added offersProducts
 
 export default function TaxonomyPrototype2Page() {
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartmentGrid")
   const [selectedSuperDepartmentId, setSelectedSuperDepartmentId] = useState<string | null>(null)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null)
-  const [selectedAisleIdForTabs, setSelectedAisleIdForTabs] = useState<string | null>(null) // New state for aisle when showing tabs
+  const [selectedAisleIdForTabs, setSelectedAisleIdForTabs] = useState<string | null>(null)
   const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null)
-  const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all") // New state for selected tab in aisle products
+  const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all")
 
   const [superDepartmentsData, setSuperDepartmentsData] = useState<TaxonomyItem[] | null>(null)
   const [fetchedBranches, setFetchedBranches] = useState<Map<string, TaxonomyItem[]>>(new Map())
@@ -110,12 +115,14 @@ export default function TaxonomyPrototype2Page() {
       $page: Int
       $count: Int
       $sortBy: String
+      $offers: Boolean # Only offers variable
     ) {
       category(
         page: $page
         count: $count
         sortBy: $sortBy
         categoryId: $categoryId
+        offers: $offers # Used offers variable
       ) {
         pageInformation: info {
           totalCount: total
@@ -147,6 +154,13 @@ export default function TaxonomyPrototype2Page() {
             price: actual
             unitPrice
             unitOfMeasure
+          }
+          promotions { # Added promotions field
+            promotionId: id
+            promotionType
+            startDate
+            endDate
+            offerText: description
           }
         }
       }
@@ -195,16 +209,28 @@ export default function TaxonomyPrototype2Page() {
   )
 
   const fetchProducts = useCallback(
-    async (categoryId: string) => {
+    async (categoryId: string, offers = false) => {
+      // Only offers parameter, no filters array
       setLoading(true)
       setError(null)
       try {
-        const variables = {
+        const variables: {
+          categoryId: string
+          page: number
+          count: number
+          sortBy: string
+          offers?: boolean
+        } = {
           categoryId: categoryId,
           page: 0,
           count: 20,
           sortBy: "relevance",
         }
+
+        if (offers) {
+          variables.offers = true
+        }
+
         const result = await graphqlRequest<GetCategoryProductsResponse>(PRODUCT_QUERY, variables)
 
         if (result.data?.category) {
@@ -292,6 +318,23 @@ export default function TaxonomyPrototype2Page() {
           .flatMap((a) => a.children || [])
           .find((s) => s.id === selectedShelfId)
         return shelf ? shelf.name : "Shelf Products"
+      case "offersProducts": // New title for offers
+        let offerCategoryName = "Category"
+        if (selectedShelfId) {
+          offerCategoryName = currentAisleShelves.find((s) => s.id === selectedShelfId)?.name || "Shelf"
+        } else if (selectedAisleIdForTabs) {
+          offerCategoryName =
+            departmentsForSelectedSuperDepartment
+              .flatMap((d) => d.children || [])
+              .find((a) => a.id === selectedAisleIdForTabs)?.name || "Aisle"
+        } else if (selectedDepartmentId) {
+          offerCategoryName =
+            departmentsForSelectedSuperDepartment.find((d) => d.id === selectedDepartmentId)?.name || "Department"
+        } else if (selectedSuperDepartmentId) {
+          offerCategoryName =
+            superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "Super Department"
+        }
+        return `Special offers in ${offerCategoryName}`
       default:
         return "Tesco Taxonomy"
     }
@@ -301,30 +344,30 @@ export default function TaxonomyPrototype2Page() {
     setSelectedSuperDepartmentId(id)
     setCurrentLevel("departmentTabs")
     setProductData(null)
-    setSelectedAisleIdForTabs(null) // Clear aisle for tabs
-    setSelectedShelfId(null) // Clear shelf
-    setSelectedShelfTabId("all") // Reset tab
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
   }
 
   const handleDepartmentTabSelect = (id: string) => {
     setSelectedDepartmentId(id)
-    setSelectedAisleIdForTabs(null) // Clear aisle for tabs
-    setSelectedShelfId(null) // Clear shelf
-    setSelectedShelfTabId("all") // Reset tab
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
   }
 
   const handleAisleSelectForProducts = (aisleId: string) => {
     setSelectedAisleIdForTabs(aisleId)
     setSelectedShelfId(null)
-    setSelectedShelfTabId("all") // Default to 'all' when showing aisle products
+    setSelectedShelfTabId("all")
     setCurrentLevel("aisleProductsWithTabs")
     fetchProducts(aisleId)
   }
 
   const handleShelfSelectForProducts = (shelfId: string) => {
     setSelectedShelfId(shelfId)
-    setSelectedAisleIdForTabs(null) // Clear aisle for tabs
-    setSelectedShelfTabId("all") // Reset tab
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfTabId("all")
     setCurrentLevel("shelfProducts")
     fetchProducts(shelfId)
   }
@@ -332,10 +375,15 @@ export default function TaxonomyPrototype2Page() {
   const handleShelfTabClick = (id: string) => {
     setSelectedShelfTabId(id)
     if (id === "all") {
-      fetchProducts(selectedAisleIdForTabs!) // Fetch all products for the aisle
+      fetchProducts(selectedAisleIdForTabs!)
     } else {
-      fetchProducts(id) // Fetch products for the specific shelf
+      fetchProducts(id)
     }
+  }
+
+  const handleSpecialOffersClick = (categoryId: string, categoryName: string) => {
+    setCurrentLevel("offersProducts")
+    fetchProducts(categoryId, true) // Fetch products with offers: true
   }
 
   const handleBack = () => {
@@ -343,13 +391,52 @@ export default function TaxonomyPrototype2Page() {
       setCurrentLevel("superDepartmentGrid")
       setSelectedSuperDepartmentId(null)
       setSelectedDepartmentId(null)
-    } else if (currentLevel === "aisleProductsWithTabs" || currentLevel === "shelfProducts") {
+    } else if (
+      currentLevel === "aisleProductsWithTabs" ||
+      currentLevel === "shelfProducts" ||
+      currentLevel === "offersProducts"
+    ) {
+      // Added offersProducts
       setCurrentLevel("departmentTabs")
       setProductData(null)
       setSelectedAisleIdForTabs(null)
       setSelectedShelfId(null)
       setSelectedShelfTabId("all")
     }
+  }
+
+  const renderSpecialOffersButton = () => {
+    let categoryId: string | null = null
+    let categoryName: string | null = null
+
+    if (currentLevel === "departmentTabs" && selectedDepartmentId) {
+      categoryId = selectedDepartmentId
+      categoryName =
+        departmentsForSelectedSuperDepartment.find((d) => d.id === selectedDepartmentId)?.name || "this department"
+    } else if (currentLevel === "aisleProductsWithTabs" && selectedAisleIdForTabs) {
+      categoryId = selectedAisleIdForTabs
+      categoryName =
+        departmentsForSelectedSuperDepartment
+          .flatMap((d) => d.children || [])
+          .find((a) => a.id === selectedAisleIdForTabs)?.name || "this aisle"
+    } else if (currentLevel === "shelfProducts" && selectedShelfId) {
+      categoryId = selectedShelfId
+      categoryName = currentAisleShelves.find((s) => s.id === selectedShelfId)?.name || "this shelf"
+    }
+
+    if (categoryId && categoryName) {
+      return (
+        <div className="p-4 pt-0">
+          <Button
+            onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
+            className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
+          >
+            Special offers in {categoryName}
+          </Button>
+        </div>
+      )
+    }
+    return null
   }
 
   const renderContent = () => {
@@ -398,22 +485,17 @@ export default function TaxonomyPrototype2Page() {
           />
         )
       case "aisleProductsWithTabs":
+      case "shelfProducts":
+      case "offersProducts": // Handle offersProducts here
         if (!productData || productData.category.productItems.length === 0) {
-          return <div className="p-4 text-gray-500">No products found for this aisle.</div>
+          return (
+            <div className="p-4 text-gray-500">
+              No products found for this {currentLevel === "offersProducts" ? "offer category" : "selection"}.
+            </div>
+          )
         }
         return (
           <AisleProductListingWithTabs
-            products={productData.category.productItems}
-            totalCount={productData.category.pageInformation.totalCount}
-            // Removed shelves, selectedShelfTabId, onShelfTabClick props as tabs are moved out
-          />
-        )
-      case "shelfProducts":
-        if (!productData || productData.category.productItems.length === 0) {
-          return <div className="p-4 text-gray-500">No products found for this shelf.</div>
-        }
-        return (
-          <ProductGrid
             products={productData.category.productItems}
             totalCount={productData.category.pageInformation.totalCount}
           />
@@ -436,13 +518,14 @@ export default function TaxonomyPrototype2Page() {
             selectedDepartmentId={selectedDepartmentId}
           />
         )}
-        {currentLevel === "aisleProductsWithTabs" && currentAisleShelves.length > 0 && (
+        {currentLevel === "aisleProductsWithTabs" && currentAisleShelves.length > 1 && (
           <AisleShelfTabs
             shelves={currentAisleShelves}
             selectedShelfTabId={selectedShelfTabId}
             onShelfTabClick={handleShelfTabClick}
           />
         )}
+        {renderSpecialOffersButton()} {/* Render the special offers button */}
       </NavigationHeader>
       <div className="flex-grow overflow-y-auto">{renderContent()}</div>
     </div>

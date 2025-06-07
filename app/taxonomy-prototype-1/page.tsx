@@ -13,13 +13,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AisleProductListing } from "@/components/taxonomy-prototype-1/aisle-product-listing" // Still used for product display
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" // For tabs
 import { Button } from "@/components/ui/button" // For tabs
 
 console.log("TaxonomyPrototype1Page component is rendering.")
 
-type NavigationLevel = "superDepartment" | "department" | "aisle" | "shelf" | "products" | "aisleProducts"
+type NavigationLevel =
+  | "superDepartment"
+  | "department"
+  | "aisle"
+  | "shelf"
+  | "products"
+  | "aisleProducts"
+  | "offersProducts" // Added offersProducts
 
 export default function TaxonomyPrototype1Page() {
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartment")
@@ -36,17 +42,31 @@ export default function TaxonomyPrototype1Page() {
   const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all") // New state for selected tab
 
   const TAXONOMY_QUERY = `
-    query GetTaxonomy(
-      $storeId: ID
-      $includeInspirationEvents: Boolean
-      $style: String
-      $categoryId: String
+  query GetTaxonomy(
+    $storeId: ID
+    $includeInspirationEvents: Boolean
+    $style: String
+    $categoryId: String
+  ) {
+    taxonomy(
+      storeId: $storeId
+      includeInspirationEvents: $includeInspirationEvents
+      categoryId: $categoryId
     ) {
-      taxonomy(
-        storeId: $storeId
-        includeInspirationEvents: $includeInspirationEvents
-        categoryId: $categoryId
-      ) {
+      id
+      name
+      label
+      pageType
+      images(style: $style) {
+        style
+        images {
+          type
+          url
+          region
+          title
+        }
+      }
+      children {
         id
         name
         label
@@ -88,75 +108,70 @@ export default function TaxonomyPrototype1Page() {
                 title
               }
             }
-            children {
-              id
-              name
-              label
-              pageType
-              images(style: $style) {
-                style
-                images {
-                  type
-                  url
-                  region
-                  title
-                }
-              }
-            }
           }
         }
       }
     }
-  `
+  }
+`
 
   const PRODUCT_QUERY = `
-    query GetCategoryProducts(
-      $categoryId: ID
-      $page: Int
-      $count: Int
-      $sortBy: String
+  query GetCategoryProducts(
+    $categoryId: ID
+    $page: Int
+    $count: Int
+    $sortBy: String
+    $offers: Boolean # Added offers variable
+  ) {
+    category(
+      page: $page
+      count: $count
+      sortBy: $sortBy
+      categoryId: $categoryId
+      offers: $offers # Used offers variable
     ) {
-      category(
-        page: $page
-        count: $count
-        sortBy: $sortBy
-        categoryId: $categoryId
-      ) {
-        pageInformation: info {
-          totalCount: total
-          pageNo: page
-          count
-          pageSize
-          offset
-        }
-        productItems: products {
-          id
-          baseProductId
-          title
-          brandName
-          shortDescription
-          defaultImageUrl
-          images {
-            display {
-              default {
-                url
-                originalUrl
-              }
-            }
+      pageInformation: info {
+        totalCount: total
+        pageNo: page
+        count
+        pageSize
+        offset
+      }
+      productItems: products {
+        id
+        baseProductId
+        title
+        brandName
+        shortDescription
+        defaultImageUrl
+        images {
+          display {
             default {
               url
               originalUrl
             }
           }
-          price {
-            price: actual
-            unitPrice
-            unitOfMeasure
+          default {
+            url
+            originalUrl
           }
         }
+        price {
+          price: actual
+          unitPrice
+          unitOfMeasure
+        }
+        promotions {
+    promotionId: id
+    promotionType
+    startDate
+    endDate
+    offerText: description
+  }
       }
     }
-  `
+  }
+`
 
   const fetchTaxonomy = useCallback(
     async (categoryId?: string) => {
@@ -191,7 +206,8 @@ export default function TaxonomyPrototype1Page() {
   )
 
   const fetchProducts = useCallback(
-    async (categoryId: string) => {
+    async (categoryId: string, offers = false) => {
+      // Added offers parameter
       setLoading(true)
       setError(null)
       try {
@@ -200,6 +216,7 @@ export default function TaxonomyPrototype1Page() {
           page: 0,
           count: 20,
           sortBy: "relevance",
+          offers: offers, // Pass offers variable
         }
         console.log("Fetching products with variables:", variables)
         const result = await graphqlRequest<GetCategoryProductsResponse>(PRODUCT_QUERY, variables)
@@ -289,7 +306,13 @@ export default function TaxonomyPrototype1Page() {
     setSelectedAisleId(id)
     setSelectedShelfId(null) // Clear shelf selection
     setSelectedShelfTabId("all") // Reset tab selection to 'all'
-    if (showAisleProductsDirectly) {
+
+    // Find the selected aisle to check its children (shelves)
+    const selectedAisle = aisles.find((a) => a.id === id)
+    const shelvesForAisle = selectedAisle?.children || []
+
+    // Modify the conditional logic for navigation
+    if (showAisleProductsDirectly || shelvesForAisle.length === 1) {
       setCurrentLevel("aisleProducts") // New level for aisle-level products
       fetchProducts(id) // Fetch products for the aisle
       console.log("Selected Aisle, fetching products for aisle:", id)
@@ -315,6 +338,12 @@ export default function TaxonomyPrototype1Page() {
     }
   }
 
+  const handleSpecialOffersClick = (categoryId: string, categoryName: string) => {
+    setCurrentLevel("offersProducts")
+    fetchProducts(categoryId, true) // Fetch products with offers: true
+    console.log(`Fetching special offers for ${categoryName} (ID: ${categoryId})`)
+  }
+
   const handleBack = () => {
     if (currentLevel === "products") {
       setCurrentLevel("aisle")
@@ -324,6 +353,19 @@ export default function TaxonomyPrototype1Page() {
       setCurrentLevel("department") // From aisle products, go back to department grid
       setProductData(null)
       console.log("Navigating back from Aisle Products to Department level.")
+    } else if (currentLevel === "offersProducts") {
+      // Handle back from offers based on the deepest selected category
+      if (selectedShelfId) {
+        setCurrentLevel("shelf")
+      } else if (selectedAisleId) {
+        setCurrentLevel("aisle")
+      } else if (selectedDepartmentId) {
+        setCurrentLevel("department")
+      } else if (selectedSuperDepartmentId) {
+        setCurrentLevel("superDepartment") // Go back to superDepartment if offers were from there
+      }
+      setProductData(null)
+      console.log("Navigating back from Special Offers.")
     } else if (currentLevel === "shelf") {
       setCurrentLevel("aisle")
       console.log("Navigating back from Shelf Grid to Aisle level.")
@@ -347,9 +389,24 @@ export default function TaxonomyPrototype1Page() {
       case "shelf":
         return shelves.find((s) => s.id === selectedShelfId)?.name || "Shelves"
       case "products":
+        // Show shelf name for products from a specific shelf
         return shelves.find((s) => s.id === selectedShelfId)?.name || "Products"
       case "aisleProducts":
+        // Show aisle name for products from an aisle (single shelf or direct toggle)
         return aisles.find((a) => a.id === selectedAisleId)?.name || "Aisle Products"
+      case "offersProducts": // New title for offers
+        let offerCategoryName = "Category"
+        if (selectedShelfId) {
+          offerCategoryName = shelves.find((s) => s.id === selectedShelfId)?.name || "Shelf"
+        } else if (selectedAisleId) {
+          offerCategoryName = aisles.find((a) => a.id === selectedAisleId)?.name || "Aisle"
+        } else if (selectedDepartmentId) {
+          offerCategoryName = departments.find((d) => d.id === selectedDepartmentId)?.name || "Department"
+        } else if (selectedSuperDepartmentId) {
+          offerCategoryName =
+            superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "Super Department"
+        }
+        return `Special offers in ${offerCategoryName}`
       default:
         return "Tesco Taxonomy"
     }
@@ -379,7 +436,6 @@ export default function TaxonomyPrototype1Page() {
         if (departments.length === 0) {
           return <div className="p-4 text-gray-500">No departments found for this category.</div>
         }
-        // Removed NavigationHeader from here
         return <DepartmentGrid departments={departments} onSelect={handleDepartmentSelect} />
       case "department":
         if (aisles.length === 0) {
@@ -399,8 +455,14 @@ export default function TaxonomyPrototype1Page() {
         }
         return <ShelfGrid shelves={shelves} onSelect={handleShelfSelect} />
       case "products":
+      case "aisleProducts":
+      case "offersProducts": // Handle offersProducts here
         if (!productData || productData.category.productItems.length === 0) {
-          return <div className="p-4 text-gray-500">No products found for this shelf.</div>
+          return (
+            <div className="p-4 text-gray-500">
+              No products found for this {currentLevel === "offersProducts" ? "offer category" : "selection"}.
+            </div>
+          )
         }
         return productData ? (
           <ProductGrid
@@ -409,16 +471,6 @@ export default function TaxonomyPrototype1Page() {
           />
         ) : (
           <div className="p-4 text-gray-500">No products found.</div>
-        )
-      case "aisleProducts":
-        if (!productData || productData.category.productItems.length === 0) {
-          return <div className="p-4 text-gray-500">No products found for this aisle.</div>
-        }
-        return (
-          <AisleProductListing
-            products={productData.category.productItems}
-            totalCount={productData.category.pageInformation.totalCount}
-          />
         )
       default:
         return <div className="p-4 text-gray-500">Select a category to browse.</div>
@@ -469,11 +521,43 @@ export default function TaxonomyPrototype1Page() {
     )
   }
 
+  const renderSpecialOffersButton = () => {
+    let categoryId: string | null = null
+    let categoryName: string | null = null
+
+    if (currentLevel === "superDepartment" && selectedSuperDepartmentId) {
+      categoryId = selectedSuperDepartmentId
+      categoryName = superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "this category"
+    } else if (currentLevel === "department" && selectedDepartmentId) {
+      categoryId = selectedDepartmentId
+      categoryName = departments.find((d) => d.id === selectedDepartmentId)?.name || "this department"
+    } else if (currentLevel === "aisle" && selectedAisleId) {
+      categoryId = selectedAisleId
+      categoryName = aisles.find((a) => a.id === selectedAisleId)?.name || "this aisle"
+    } else if (currentLevel === "shelf" && selectedShelfId) {
+      categoryId = selectedShelfId
+      categoryName = shelves.find((s) => s.id === selectedShelfId)?.name || "this shelf"
+    }
+
+    if (categoryId && categoryName) {
+      return (
+        <div className="p-4 pt-0">
+          <Button
+            onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
+            className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
+          >
+            Special offers in {categoryName}
+          </Button>
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* Left Panel - SuperDepartments */}
       <div className={cn("transition-all duration-300 ease-in-out", isSuperDepartmentLevel ? "w-1/3" : "w-0 hidden")}>
-        {/* Removed NavigationHeader and its wrapper div entirely */}
         {loading && (
           <div className="p-2 space-y-2">
             <Skeleton className="h-10 w-full" />
@@ -511,6 +595,7 @@ export default function TaxonomyPrototype1Page() {
       >
         <NavigationHeader title={getHeaderTitle()} onBack={currentLevel !== "superDepartment" ? handleBack : undefined}>
           {renderShelfTabs()} {/* Render tabs as children of the header */}
+          {renderSpecialOffersButton()} {/* Render the special offers button */}
         </NavigationHeader>
         {renderRightPanelContent()}
       </div>
