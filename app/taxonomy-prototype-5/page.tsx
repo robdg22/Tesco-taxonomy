@@ -239,8 +239,8 @@ export default function TaxonomyPrototype5Page() {
     [PRODUCT_QUERY],
   )
 
-  // Load custom taxonomy from Vercel Blob
-  const loadCustomTaxonomy = async () => {
+  // Load initial taxonomy (only custom taxonomy)
+  const loadInitialTaxonomy = async () => {
     try {
       const response = await fetch('/api/taxonomy')
       if (!response.ok) {
@@ -252,23 +252,14 @@ export default function TaxonomyPrototype5Page() {
         setSuperDepartmentsData(customData)
         setUsingCustomTaxonomy(true)
         setLoading(false)
-        return true
       } else {
-        console.warn('Custom taxonomy data is not in expected format')
-        return false
+        setError('Custom taxonomy data is not in expected format')
+        setLoading(false)
       }
     } catch (error) {
       console.error('Failed to load custom taxonomy:', error)
-      return false
-    }
-  }
-
-  // Load initial taxonomy (try custom first, fallback to API)
-  const loadInitialTaxonomy = async () => {
-    const customLoaded = await loadCustomTaxonomy()
-    if (!customLoaded) {
-      const data = await fetchTaxonomyBranch(null, "rounded")
-      setSuperDepartmentsData(data)
+      setError(`Failed to load custom taxonomy: ${error instanceof Error ? error.message : String(error)}`)
+      setLoading(false)
     }
   }
 
@@ -278,7 +269,7 @@ export default function TaxonomyPrototype5Page() {
 
   const getHeaderTitle = () => {
     if (currentLevel === "superDepartmentGrid") {
-      return usingCustomTaxonomy ? "Custom Taxonomy - Super Departments" : "Super Departments"
+      return "Custom Taxonomy - Super Departments"
     }
     if (currentLevel === "departmentTabs" && selectedSuperDepartmentId) {
       const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
@@ -299,7 +290,7 @@ export default function TaxonomyPrototype5Page() {
     if (currentLevel === "offersProducts") {
       return "Special Offers"
     }
-    return "Taxonomy"
+    return "Custom Taxonomy"
   }
 
   const handleSuperDepartmentSelect = (id: string) => {
@@ -466,46 +457,6 @@ export default function TaxonomyPrototype5Page() {
         title={getHeaderTitle()}
         onBack={currentLevel !== "superDepartmentGrid" ? handleBack : undefined}
       >
-        {usingCustomTaxonomy && currentLevel === "superDepartmentGrid" && (
-          <div className="px-4 pb-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-green-600 font-medium">Using Custom Taxonomy</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const data = await fetchTaxonomyBranch(null, "rounded")
-                  setSuperDepartmentsData(data)
-                  setUsingCustomTaxonomy(false)
-                }}
-              >
-                Switch to API
-              </Button>
-            </div>
-          </div>
-        )}
-        {!usingCustomTaxonomy && currentLevel === "superDepartmentGrid" && (
-          <div className="px-4 pb-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-blue-600 font-medium">Using API Taxonomy</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const success = await loadCustomTaxonomy()
-                  if (!success) {
-                    // Fallback to API taxonomy
-                    const data = await fetchTaxonomyBranch(null, "rounded")
-                    setSuperDepartmentsData(data)
-                    setUsingCustomTaxonomy(false)
-                  }
-                }}
-              >
-                Switch to Custom
-              </Button>
-            </div>
-          </div>
-        )}
         {currentLevel === "departmentTabs" && departmentsForSelectedSuperDepartment.length > 0 && (
           <DepartmentTabs
             departments={departmentsForSelectedSuperDepartment}
