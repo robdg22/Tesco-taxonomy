@@ -396,6 +396,30 @@ export default function TaxonomyPrototype1CustomPage() {
     fetchTaxonomy()
   }
 
+  const handleRefreshCustom = () => {
+    // Reload custom taxonomy from localStorage
+    try {
+      const customTaxonomyData = localStorage.getItem('customTaxonomy')
+      if (customTaxonomyData) {
+        const parsedData = JSON.parse(customTaxonomyData)
+        setTaxonomyData(parsedData)
+        setUsingCustomTaxonomy(true)
+        setSelectedSuperDepartmentId(null)
+        setSelectedDepartmentId(null)
+        setSelectedAisleId(null)
+        setSelectedShelfId(null)
+        setCurrentLevel("superDepartment")
+        console.log("Custom taxonomy refreshed from localStorage:", parsedData)
+      } else {
+        // No custom taxonomy, load from API
+        handleResetToAPI()
+      }
+    } catch (error) {
+      console.error("Error refreshing custom taxonomy:", error)
+      handleResetToAPI()
+    }
+  }
+
   const handleBack = () => {
     if (currentLevel === "products") {
       setCurrentLevel("aisle")
@@ -655,9 +679,9 @@ export default function TaxonomyPrototype1CustomPage() {
                   Edit
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" className="h-6 text-xs" onClick={handleResetToAPI}>
+              <Button variant="outline" size="sm" className="h-6 text-xs" onClick={handleRefreshCustom}>
                 <RotateCcw className="h-3 w-3 mr-1" />
-                Reset to API
+                Refresh
               </Button>
             </div>
           )}
