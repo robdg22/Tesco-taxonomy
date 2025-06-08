@@ -126,7 +126,8 @@ export async function POST(request: NextRequest) {
         
         const blob = await put(TAXONOMY_BLOB_NAME, jsonString, {
           access: 'public',
-          contentType: 'application/json'
+          contentType: 'application/json',
+          allowOverwrite: true
         })
         
         console.log('Successfully saved to blob:', blob.url)
