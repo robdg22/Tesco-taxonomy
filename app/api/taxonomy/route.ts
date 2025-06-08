@@ -1,31 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, readFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
-import path from 'path'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
-const TAXONOMY_FILE = path.join(DATA_DIR, 'custom-taxonomy.json')
-
-// Ensure data directory exists
-async function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) {
-    await mkdir(DATA_DIR, { recursive: true })
-  }
-}
+// Simple in-memory storage for demo purposes
+// In production, you'd want to use a proper database
+let taxonomyData: any = null
 
 export async function GET() {
   try {
-    await ensureDataDir()
-    
-    if (!existsSync(TAXONOMY_FILE)) {
-      return NextResponse.json({ data: null }, { status: 200 })
-    }
-    
-    const data = await readFile(TAXONOMY_FILE, 'utf-8')
-    const taxonomy = JSON.parse(data)
-    
     return NextResponse.json({ 
-      data: taxonomy,
+      data: taxonomyData,
       lastModified: new Date().toISOString()
     }, { status: 200 })
   } catch (error) {
@@ -49,19 +31,18 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    await ensureDataDir()
-    
     const dataToSave = {
       taxonomy,
       savedAt: new Date().toISOString(),
       version: '1.0'
     }
     
-    await writeFile(TAXONOMY_FILE, JSON.stringify(dataToSave, null, 2))
+    // Store in memory (will persist during the serverless function lifetime)
+    taxonomyData = dataToSave
     
     return NextResponse.json({ 
       success: true,
-      message: 'Taxonomy saved successfully',
+      message: 'Taxonomy saved successfully (in memory)',
       savedAt: dataToSave.savedAt
     }, { status: 200 })
   } catch (error) {
@@ -75,9 +56,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    if (existsSync(TAXONOMY_FILE)) {
-      await writeFile(TAXONOMY_FILE, JSON.stringify({ taxonomy: null, deletedAt: new Date().toISOString() }))
-    }
+    taxonomyData = null
     
     return NextResponse.json({ 
       success: true,
