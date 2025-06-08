@@ -84,4 +84,4 @@ export const useCustomTaxonomy = () => {
     convertToTaxonomyItems: customTaxonomyManager.convertToTaxonomyItems,
     isClient
   }
-} 
+}
