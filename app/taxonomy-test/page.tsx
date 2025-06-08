@@ -111,33 +111,74 @@ export default function TaxonomyTestPage() {
   const loadFromOnline = async () => {
     setLoadingOnline(true)
     try {
-      const response = await fetch('/api/taxonomy')
+      console.log('Loading taxonomy from online API...')
+      
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      
+      const response = await fetch('/api/taxonomy', {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      
+      console.log('API response status:', response.status)
       const result = await response.json()
+      console.log('API response:', result)
       
       if (response.ok && result.data?.taxonomy) {
         const withParentIds = addParentIds(result.data.taxonomy)
         setEditedData(withParentIds)
         setOnlineStatus('saved')
-        console.log("Online taxonomy loaded:", result.data.taxonomy)
-        return
+        console.log("Online taxonomy loaded successfully")
+      } else if (response.ok && result.data === null) {
+        console.log("No online taxonomy found")
+        setOnlineStatus('none')
+        // Try localStorage fallback
+        const customTaxonomyData = localStorage.getItem('customTaxonomy')
+        if (customTaxonomyData) {
+          const parsedData = JSON.parse(customTaxonomyData)
+          const withParentIds = addParentIds(parsedData)
+          setEditedData(withParentIds)
+          console.log("Loaded from localStorage fallback")
+        }
+      } else {
+        console.error('API error:', result)
+        setOnlineStatus('error')
+        // Try localStorage fallback
+        const customTaxonomyData = localStorage.getItem('customTaxonomy')
+        if (customTaxonomyData) {
+          const parsedData = JSON.parse(customTaxonomyData)
+          const withParentIds = addParentIds(parsedData)
+          setEditedData(withParentIds)
+          console.log("Loaded from localStorage after API error")
+        }
       }
     } catch (error) {
       console.error("Error loading online taxonomy:", error)
-    }
-    
-    // Fallback to localStorage
-    try {
-      const existing = localStorage.getItem('customTaxonomy')
-      if (existing && existing !== 'null') {
-        const parsed = JSON.parse(existing)
-        setEditedData(addParentIds(parsed))
-        console.log("localStorage taxonomy loaded as fallback")
+      setOnlineStatus('error')
+      
+      // Check if it's a timeout error
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error("Request timed out after 10 seconds")
+        alert("Loading online taxonomy timed out. Using local data if available.")
       }
-    } catch (error) {
-      console.error("Error loading localStorage taxonomy:", error)
+      
+      // Try localStorage fallback
+      try {
+        const customTaxonomyData = localStorage.getItem('customTaxonomy')
+        if (customTaxonomyData) {
+          const parsedData = JSON.parse(customTaxonomyData)
+          const withParentIds = addParentIds(parsedData)
+          setEditedData(withParentIds)
+          console.log("Loaded from localStorage after error")
+        }
+      } catch (localError) {
+        console.error("Error loading from localStorage:", localError)
+      }
+    } finally {
+      setLoadingOnline(false)
     }
-    
-    setLoadingOnline(false)
   }
 
   const addParentIds = (categories: TaxonomyItem[], parentId?: string): CategoryWithParent[] => {
@@ -476,55 +517,70 @@ export default function TaxonomyTestPage() {
     }
   }
 
-  const saveOnline = async () => {
-    if (!editedData) return
-    
+  const saveToOnline = async () => {
     setSavingOnline(true)
-    setOnlineStatus('none')
-    
     try {
-      // Remove parentId before saving
-      const cleanData = JSON.parse(JSON.stringify(editedData))
-      const removeParentIds = (categories: any[]) => {
-        categories.forEach(category => {
-          delete category.parentId
-          if (category.children) {
-            removeParentIds(category.children)
-          }
-        })
-      }
-      removeParentIds(cleanData)
+      console.log('Saving taxonomy to online API...')
+      
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for saves
       
       const response = await fetch('/api/taxonomy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ taxonomy: cleanData }),
+        body: JSON.stringify({ taxonomy: editedData }),
+        signal: controller.signal
       })
+      clearTimeout(timeoutId)
       
+      console.log('Save response status:', response.status)
       const result = await response.json()
+      console.log('Save response:', result)
       
-      if (response.ok) {
-        // Also save to localStorage as backup
-        localStorage.setItem('customTaxonomy', JSON.stringify(cleanData))
-        setHasChanges(false)
+      if (response.ok && result.success) {
         setOnlineStatus('saved')
-        console.log("Custom taxonomy saved online:", result)
+        setHasChanges(false)
+        console.log("Taxonomy saved online successfully")
+        alert(`Taxonomy saved online successfully! (${result.source})`)
       } else {
+        console.error('Save API error:', result)
         setOnlineStatus('error')
-        console.error("Failed to save online:", result.error)
+        alert(`Failed to save online: ${result.error || 'Unknown error'}`)
+        
+        // Save to localStorage as fallback
+        localStorage.setItem('customTaxonomy', JSON.stringify(editedData))
+        console.log("Saved to localStorage as fallback")
       }
     } catch (error) {
+      console.error("Error saving online taxonomy:", error)
       setOnlineStatus('error')
-      console.error("Error saving online:", error)
+      
+      // Check if it's a timeout error
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error("Save request timed out after 15 seconds")
+        alert("Save request timed out. Saved to local storage instead.")
+      } else {
+        alert(`Failed to save online: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      // Save to localStorage as fallback
+      try {
+        localStorage.setItem('customTaxonomy', JSON.stringify(editedData))
+        console.log("Saved to localStorage after error")
+      } catch (localError) {
+        console.error("Error saving to localStorage:", localError)
+        alert("Failed to save both online and locally!")
+      }
     } finally {
       setSavingOnline(false)
     }
   }
 
   const saveAndTest = async () => {
-    await saveOnline()
+    await saveToOnline()
     // Open prototype in new tab
     window.open('/taxonomy-prototype-4', '_blank')
   }
@@ -825,7 +881,7 @@ export default function TaxonomyTestPage() {
                       Save Local
                     </Button>
                     <Button 
-                      onClick={saveOnline} 
+                      onClick={saveToOnline} 
                       size="sm"
                       disabled={savingOnline}
                     >
