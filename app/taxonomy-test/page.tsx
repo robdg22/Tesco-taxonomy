@@ -99,19 +99,46 @@ export default function TaxonomyTestPage() {
   const [editingImages, setEditingImages] = useState<Record<string, string>>({})
   const [newCategoryName, setNewCategoryName] = useState("")
   const [hasChanges, setHasChanges] = useState(false)
+  const [savingOnline, setSavingOnline] = useState(false)
+  const [loadingOnline, setLoadingOnline] = useState(false)
+  const [onlineStatus, setOnlineStatus] = useState<'none' | 'saved' | 'error'>('none')
 
   useEffect(() => {
-    // Check if custom taxonomy already exists
-    const existing = localStorage.getItem('customTaxonomy')
-    if (existing && existing !== 'null') {
-      try {
+    // Try to load from online API first, then fallback to localStorage
+    loadFromOnline()
+  }, [])
+
+  const loadFromOnline = async () => {
+    setLoadingOnline(true)
+    try {
+      const response = await fetch('/api/taxonomy')
+      const result = await response.json()
+      
+      if (response.ok && result.data?.taxonomy) {
+        const withParentIds = addParentIds(result.data.taxonomy)
+        setEditedData(withParentIds)
+        setOnlineStatus('saved')
+        console.log("Online taxonomy loaded:", result.data.taxonomy)
+        return
+      }
+    } catch (error) {
+      console.error("Error loading online taxonomy:", error)
+    }
+    
+    // Fallback to localStorage
+    try {
+      const existing = localStorage.getItem('customTaxonomy')
+      if (existing && existing !== 'null') {
         const parsed = JSON.parse(existing)
         setEditedData(addParentIds(parsed))
-      } catch (error) {
-        console.error("Error loading custom taxonomy:", error)
+        console.log("localStorage taxonomy loaded as fallback")
       }
+    } catch (error) {
+      console.error("Error loading localStorage taxonomy:", error)
     }
-  }, [])
+    
+    setLoadingOnline(false)
+  }
 
   const addParentIds = (categories: TaxonomyItem[], parentId?: string): CategoryWithParent[] => {
     return categories.map(category => ({
@@ -428,7 +455,7 @@ export default function TaxonomyTestPage() {
     }
   }
 
-  const saveChanges = () => {
+  const saveChanges = async () => {
     if (editedData) {
       // Remove parentId before saving (it's just for editing)
       const cleanData = JSON.parse(JSON.stringify(editedData))
@@ -442,14 +469,62 @@ export default function TaxonomyTestPage() {
       }
       removeParentIds(cleanData)
       
+      // Save to localStorage as backup
       localStorage.setItem('customTaxonomy', JSON.stringify(cleanData))
       setHasChanges(false)
-      console.log("Custom taxonomy saved:", cleanData)
+      console.log("Custom taxonomy saved to localStorage:", cleanData)
     }
   }
 
-  const saveAndTest = () => {
-    saveChanges()
+  const saveOnline = async () => {
+    if (!editedData) return
+    
+    setSavingOnline(true)
+    setOnlineStatus('none')
+    
+    try {
+      // Remove parentId before saving
+      const cleanData = JSON.parse(JSON.stringify(editedData))
+      const removeParentIds = (categories: any[]) => {
+        categories.forEach(category => {
+          delete category.parentId
+          if (category.children) {
+            removeParentIds(category.children)
+          }
+        })
+      }
+      removeParentIds(cleanData)
+      
+      const response = await fetch('/api/taxonomy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ taxonomy: cleanData }),
+      })
+      
+      const result = await response.json()
+      
+      if (response.ok) {
+        // Also save to localStorage as backup
+        localStorage.setItem('customTaxonomy', JSON.stringify(cleanData))
+        setHasChanges(false)
+        setOnlineStatus('saved')
+        console.log("Custom taxonomy saved online:", result)
+      } else {
+        setOnlineStatus('error')
+        console.error("Failed to save online:", result.error)
+      }
+    } catch (error) {
+      setOnlineStatus('error')
+      console.error("Error saving online:", error)
+    } finally {
+      setSavingOnline(false)
+    }
+  }
+
+  const saveAndTest = async () => {
+    await saveOnline()
     // Open prototype in new tab
     window.open('/taxonomy-prototype-4', '_blank')
   }
@@ -685,23 +760,51 @@ export default function TaxonomyTestPage() {
         <CardHeader>
           <CardTitle>Load Taxonomy Data</CardTitle>
           <CardDescription>
-            Load the original Tesco taxonomy to start editing
+            Load the original Tesco taxonomy to start editing, or load your saved online taxonomy
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button 
-            onClick={loadOriginalTaxonomy}
-            disabled={loadingOriginal}
-            className="flex items-center space-x-2"
-          >
-            {loadingOriginal ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            <span>{loadingOriginal ? "Loading..." : "Load Taxonomy"}</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={loadOriginalTaxonomy}
+              disabled={loadingOriginal}
+              className="flex items-center space-x-2"
+              variant="outline"
+            >
+              {loadingOriginal ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <span>{loadingOriginal ? "Loading..." : "Load API Taxonomy"}</span>
+            </Button>
+            
+            <Button 
+              onClick={loadFromOnline}
+              disabled={loadingOnline}
+              className="flex items-center space-x-2"
+            >
+              {loadingOnline ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <span>{loadingOnline ? "Loading..." : "Load Online Taxonomy"}</span>
+            </Button>
+          </div>
           
           {originalData && (
             <div className="bg-green-50 p-4 rounded-lg">
               <p className="text-sm text-green-800">
-                ✅ Taxonomy loaded with {originalData.length} top-level categories
+                ✅ API taxonomy loaded with {originalData.length} top-level categories
+              </p>
+            </div>
+          )}
+          
+          {onlineStatus === 'saved' && (
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="text-sm text-blue-800">
+                ☁️ Online taxonomy is available
+              </p>
+            </div>
+          )}
+          
+          {onlineStatus === 'error' && (
+            <div className="bg-red-50 p-4 rounded-lg">
+              <p className="text-sm text-red-800">
+                ❌ Error with online taxonomy - using localStorage backup
               </p>
             </div>
           )}
@@ -716,10 +819,28 @@ export default function TaxonomyTestPage() {
               <span>Taxonomy Structure</span>
               <div className="flex gap-2">
                 {hasChanges && (
-                  <Button onClick={saveAndTest} size="sm">
-                    <Save className="h-4 w-4 mr-1" />
-                    Save and Test
-                  </Button>
+                  <>
+                    <Button onClick={saveChanges} variant="outline" size="sm">
+                      <Save className="h-4 w-4 mr-1" />
+                      Save Local
+                    </Button>
+                    <Button 
+                      onClick={saveOnline} 
+                      size="sm"
+                      disabled={savingOnline}
+                    >
+                      {savingOnline ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      Save Online
+                    </Button>
+                    <Button 
+                      onClick={saveAndTest} 
+                      size="sm"
+                      disabled={savingOnline}
+                    >
+                      {savingOnline ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      Save Online & Test
+                    </Button>
+                  </>
                 )}
                 <Button onClick={resetToOriginal} variant="outline" size="sm">
                   <RotateCcw className="h-4 w-4 mr-1" />
@@ -729,6 +850,7 @@ export default function TaxonomyTestPage() {
             </CardTitle>
             <CardDescription>
               Click the chevron to expand categories. Copy category IDs and paste them as parent IDs to reorganize.
+              {onlineStatus === 'saved' && <span className="text-blue-600"> • Synced online ☁️</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>

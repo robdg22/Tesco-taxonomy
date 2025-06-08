@@ -246,23 +246,44 @@ export default function TaxonomyPrototype4Page() {
   )
 
   useEffect(() => {
-    // Check for custom taxonomy in localStorage first
-    try {
-      const customTaxonomyData = localStorage.getItem('customTaxonomy')
-      if (customTaxonomyData) {
-        const parsedData = JSON.parse(customTaxonomyData)
-        setTaxonomyData(parsedData)
-        setUsingCustomTaxonomy(true)
-        setLoading(false)
-        console.log("Custom taxonomy loaded from localStorage:", parsedData)
-        return
+    // Check for custom taxonomy online first, then localStorage
+    const loadCustomTaxonomy = async () => {
+      try {
+        // Try online API first
+        const response = await fetch('/api/taxonomy')
+        const result = await response.json()
+        
+        if (response.ok && result.data?.taxonomy) {
+          setTaxonomyData(result.data.taxonomy)
+          setUsingCustomTaxonomy(true)
+          setLoading(false)
+          console.log("Online custom taxonomy loaded:", result.data.taxonomy)
+          return
+        }
+      } catch (error) {
+        console.error("Error loading online taxonomy:", error)
       }
-    } catch (error) {
-      console.error("Error loading custom taxonomy from localStorage:", error)
+      
+      // Fallback to localStorage
+      try {
+        const customTaxonomyData = localStorage.getItem('customTaxonomy')
+        if (customTaxonomyData) {
+          const parsedData = JSON.parse(customTaxonomyData)
+          setTaxonomyData(parsedData)
+          setUsingCustomTaxonomy(true)
+          setLoading(false)
+          console.log("localStorage custom taxonomy loaded:", parsedData)
+          return
+        }
+      } catch (error) {
+        console.error("Error loading custom taxonomy from localStorage:", error)
+      }
+      
+      // If no custom taxonomy, load from API
+      fetchTaxonomy()
     }
     
-    // If no custom taxonomy, load from API
-    fetchTaxonomy()
+    loadCustomTaxonomy()
   }, [])
 
   useEffect(() => {
