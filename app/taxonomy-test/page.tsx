@@ -451,7 +451,7 @@ export default function TaxonomyTestPage() {
   const saveAndTest = () => {
     saveChanges()
     // Open prototype in new tab
-    window.open('/taxonomy-prototype-1-custom', '_blank')
+    window.open('/taxonomy-prototype-4', '_blank')
   }
 
   const resetToOriginal = () => {
@@ -779,7 +779,7 @@ export default function TaxonomyTestPage() {
                 </p>
               </div>
             )}
-            <Link href="/taxonomy-prototype-1-custom">
+            <Link href="/taxonomy-prototype-4">
               <Button className="w-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center space-x-2">
                 <span>Test Reorganized Taxonomy</span>
                 <ArrowRight className="h-4 w-4" />

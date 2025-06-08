@@ -17,7 +17,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" // For tabs
 import { Button } from "@/components/ui/button" // For tabs
 import Link from "next/link"
 
-console.log("TaxonomyPrototype1CustomPage component is rendering.")
+console.log("TaxonomyPrototype5Page component is rendering.")
 
 type NavigationLevel =
   | "superDepartment"
@@ -28,7 +28,7 @@ type NavigationLevel =
   | "aisleProducts"
   | "offersProducts" // Added offersProducts
 
-export default function TaxonomyPrototype1CustomPage() {
+export default function TaxonomyPrototype5Page() {
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartment")
   const [selectedSuperDepartmentId, setSelectedSuperDepartmentId] = useState<string | null>(null)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null)
