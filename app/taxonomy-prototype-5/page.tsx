@@ -3,72 +3,51 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { graphqlRequest } from "@/lib/graphql-client"
 import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco"
-import { SuperDepartmentList } from "@/components/taxonomy-prototype-1/super-department-list"
-import { DepartmentGrid } from "@/components/taxonomy-prototype-1/department-grid"
-import { AisleGrid } from "@/components/taxonomy-prototype-1/aisle-grid"
-import { ShelfGrid } from "@/components/taxonomy-prototype-1/shelf-grid"
-import { ProductGrid } from "@/components/taxonomy-prototype-1/product-grid"
-import { NavigationHeader } from "@/components/taxonomy-prototype-1/navigation-header"
+import { SuperDepartmentGrid } from "@/components/taxonomy-prototype-2/super-department-grid"
+import { DepartmentTabs } from "@/components/taxonomy-prototype-2/department-tabs"
+import { DepartmentTabsContent } from "@/components/taxonomy-prototype-2/department-tabs-content"
+import { NavigationHeader } from "@/components/taxonomy-prototype-2/navigation-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Terminal, RotateCcw, Edit3 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area" // For tabs
-import { Button } from "@/components/ui/button" // For tabs
-import Link from "next/link"
-
-console.log("TaxonomyPrototype5Page component is rendering.")
+import { Terminal } from "lucide-react"
+import { AisleProductListingWithTabs } from "@/components/taxonomy-prototype-2/aisle-product-listing-with-tabs"
+import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-tabs"
+import { Button } from "@/components/ui/button"
 
 type NavigationLevel =
-  | "superDepartment"
-  | "department"
-  | "aisle"
-  | "shelf"
-  | "products"
-  | "aisleProducts"
-  | "offersProducts" // Added offersProducts
+  | "superDepartmentGrid"
+  | "departmentTabs"
+  | "aisleProductsWithTabs"
+  | "shelfProducts"
+  | "offersProducts"
 
 export default function TaxonomyPrototype5Page() {
-  const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartment")
+  const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartmentGrid")
   const [selectedSuperDepartmentId, setSelectedSuperDepartmentId] = useState<string | null>(null)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null)
-  const [selectedAisleId, setSelectedAisleId] = useState<string | null>(null)
-  const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null) // Keep for shelf-level products
+  const [selectedAisleIdForTabs, setSelectedAisleIdForTabs] = useState<string | null>(null)
+  const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null)
+  const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all")
 
-  const [taxonomyData, setTaxonomyData] = useState<TaxonomyItem[] | null>(null)
+  const [superDepartmentsData, setSuperDepartmentsData] = useState<TaxonomyItem[] | null>(null)
+  const [fetchedBranches, setFetchedBranches] = useState<Map<string, TaxonomyItem[]>>(new Map())
   const [productData, setProductData] = useState<GetCategoryProductsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showAisleProductsDirectly, setShowAisleProductsDirectly] = useState(false) // New state for toggle
-  const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all") // New state for selected tab
-  const [usingCustomTaxonomy, setUsingCustomTaxonomy] = useState(false) // Track if using custom taxonomy
+  const [usingCustomTaxonomy, setUsingCustomTaxonomy] = useState(false)
 
   const TAXONOMY_QUERY = `
-  query GetTaxonomy(
-    $storeId: ID
-    $includeInspirationEvents: Boolean
-    $style: String
-    $categoryId: String
-  ) {
-    taxonomy(
-      storeId: $storeId
-      includeInspirationEvents: $includeInspirationEvents
-      categoryId: $categoryId
+    query GetTaxonomy(
+      $storeId: ID
+      $includeInspirationEvents: Boolean
+      $style: String
+      $categoryId: String
     ) {
-      id
-      name
-      label
-      pageType
-      images(style: $style) {
-        style
-        images {
-          type
-          url
-          region
-          title
-        }
-      }
-      children {
+      taxonomy(
+        storeId: $storeId
+        includeInspirationEvents: $includeInspirationEvents
+        categoryId: $categoryId
+      ) {
         id
         name
         label
@@ -110,137 +89,152 @@ export default function TaxonomyPrototype5Page() {
                 title
               }
             }
+            children {
+              id
+              name
+              label
+              pageType
+              images(style: $style) {
+                style
+                images {
+                  type
+                  url
+                  region
+                  title
+                }
+              }
+            }
           }
         }
       }
     }
-  }
-`
+  `
 
   const PRODUCT_QUERY = `
-  query GetCategoryProducts(
-    $categoryId: ID
-    $page: Int
-    $count: Int
-    $sortBy: String
-    $offers: Boolean # Added offers variable
-  ) {
-    category(
-      page: $page
-      count: $count
-      sortBy: $sortBy
-      categoryId: $categoryId
-      offers: $offers # Used offers variable
+    query GetCategoryProducts(
+      $categoryId: ID
+      $page: Int
+      $count: Int
+      $sortBy: String
+      $offers: Boolean
     ) {
-      pageInformation: info {
-        totalCount: total
-        pageNo: page
-        count
-        pageSize
-        offset
-      }
-      productItems: products {
-        id
-        baseProductId
-        title
-        brandName
-        shortDescription
-        defaultImageUrl
-        images {
-          display {
+      category(
+        page: $page
+        count: $count
+        sortBy: $sortBy
+        categoryId: $categoryId
+        offers: $offers
+      ) {
+        pageInformation: info {
+          totalCount: total
+          pageNo: page
+          count
+          pageSize
+          offset
+        }
+        productItems: products {
+          id
+          baseProductId
+          title
+          brandName
+          shortDescription
+          defaultImageUrl
+          images {
+            display {
+              default {
+                url
+                originalUrl
+              }
+            }
             default {
               url
               originalUrl
             }
           }
-          default {
-            url
-            originalUrl
+          price {
+            price: actual
+            unitPrice
+            unitOfMeasure
+          }
+          promotions {
+            promotionId: id
+            promotionType
+            startDate
+            endDate
+            offerText: description
           }
         }
-        price {
-          price: actual
-          unitPrice
-          unitOfMeasure
-        }
-        promotions {
-    promotionId: id
-    promotionType
-    startDate
-    endDate
-    offerText: description
-  }
       }
     }
-  }
-`
+  `
 
-  const fetchTaxonomy = useCallback(
-    async (categoryId?: string) => {
+  const fetchTaxonomyBranch = useCallback(
+    async (categoryId: string | null, style: "rounded" | "thumbnail"): Promise<TaxonomyItem[] | null> => {
+      const cacheKey = `${categoryId || "root"}_${style}`
+      if (fetchedBranches.has(cacheKey)) {
+        return fetchedBranches.get(cacheKey)!
+      }
+
       setLoading(true)
       setError(null)
       try {
         const variables = {
           storeId: "3060",
-          categoryId: categoryId || null,
-          style: "thumbnail",
+          categoryId: categoryId,
+          style: style,
           includeInspirationEvents: false,
         }
-        console.log("Fetching taxonomy with variables:", variables)
         const result = await graphqlRequest<GetTaxonomyResponse>(TAXONOMY_QUERY, variables)
         if (result.data?.taxonomy) {
-          setTaxonomyData(result.data.taxonomy)
-          setUsingCustomTaxonomy(false)
-          console.log("API taxonomy data fetched:", result.data.taxonomy)
+          let dataToCache: TaxonomyItem[]
+          if (categoryId === null) {
+            dataToCache = result.data.taxonomy
+          } else {
+            dataToCache = result.data.taxonomy[0]?.children || []
+          }
+          setFetchedBranches((prev) => new Map(prev).set(cacheKey, dataToCache))
+          return dataToCache
         } else if (result.errors) {
-          console.error("Taxonomy fetch errors:", result.errors)
           setError(result.errors[0].message)
         } else {
           setError("No taxonomy data returned.")
         }
       } catch (err) {
-        console.error("Taxonomy fetch caught error:", err)
         setError(`Failed to fetch taxonomy: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoading(false)
       }
+      return null
     },
-    [TAXONOMY_QUERY],
+    [TAXONOMY_QUERY, fetchedBranches],
   )
 
   const fetchProducts = useCallback(
-    async (categoryId: string, offers = false) => {
-      // Added offers parameter
+    async (categoryId: string, offers: boolean = false): Promise<GetCategoryProductsResponse | null> => {
       setLoading(true)
       setError(null)
       try {
         const variables = {
           categoryId: categoryId,
-          page: 0,
-          count: 20,
-          sortBy: "relevance",
-          offers: offers, // Pass offers variable
+          page: 1,
+          count: 48,
+          sortBy: "RELEVANCE",
+          offers: offers,
         }
-        console.log("Fetching products with variables:", variables)
-        const result = await graphqlRequest<GetCategoryProductsResponse>(PRODUCT_QUERY, variables)
-
-        console.log("Product API raw result:", result)
-
+        const result = await graphqlRequest<{ category: GetCategoryProductsResponse }>(PRODUCT_QUERY, variables)
         if (result.data?.category) {
-          setProductData(result.data)
-          console.log("Product data fetched successfully:", result.data)
+          return result.data.category
         } else if (result.errors) {
-          console.error("Product fetch errors:", result.errors)
           setError(result.errors[0].message)
         } else {
-          setError("No product data returned or unexpected response structure.")
+          setError("No product data returned.")
         }
       } catch (err) {
-        console.error("Product fetch caught error:", err)
         setError(`Failed to fetch products: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoading(false)
       }
+      return null
     },
     [PRODUCT_QUERY],
   )
@@ -254,7 +248,7 @@ export default function TaxonomyPrototype5Page() {
         const result = await response.json()
         
         if (response.ok && result.data?.taxonomy) {
-          setTaxonomyData(result.data.taxonomy)
+          setSuperDepartmentsData(result.data.taxonomy)
           setUsingCustomTaxonomy(true)
           setLoading(false)
           console.log("Online custom taxonomy loaded:", result.data.taxonomy)
@@ -269,432 +263,215 @@ export default function TaxonomyPrototype5Page() {
         const customTaxonomyData = localStorage.getItem('customTaxonomy')
         if (customTaxonomyData) {
           const parsedData = JSON.parse(customTaxonomyData)
-          setTaxonomyData(parsedData)
+          setSuperDepartmentsData(parsedData)
           setUsingCustomTaxonomy(true)
           setLoading(false)
           console.log("localStorage custom taxonomy loaded:", parsedData)
           return
         }
       } catch (error) {
-        console.error("Error loading custom taxonomy from localStorage:", error)
+        console.error("Error loading localStorage taxonomy:", error)
       }
       
       // If no custom taxonomy, load from API
-      fetchTaxonomy()
+      loadInitialTaxonomy()
     }
-    
+
     loadCustomTaxonomy()
   }, [])
 
-  useEffect(() => {
-    if (taxonomyData && !selectedSuperDepartmentId && taxonomyData.length > 0) {
-      setSelectedSuperDepartmentId(taxonomyData[0].id)
-      console.log("Initial super department selected:", taxonomyData[0].id)
+  const loadInitialTaxonomy = async () => {
+    const data = await fetchTaxonomyBranch(null, "rounded")
+    if (data) {
+      setSuperDepartmentsData(data)
+      setUsingCustomTaxonomy(false)
     }
-  }, [taxonomyData, selectedSuperDepartmentId])
+  }
 
-  const superDepartments = useMemo(() => {
-    const sds = taxonomyData || []
-    console.log("SuperDepartments derived:", sds)
-    return sds
-  }, [taxonomyData])
-  const departments = useMemo(() => {
-    if (selectedSuperDepartmentId) {
-      const depts = superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.children || []
-      console.log("Departments derived:", depts)
-      return depts
+  const getHeaderTitle = () => {
+    if (currentLevel === "superDepartmentGrid") {
+      return "Shop by Category"
     }
-    return []
-  }, [selectedSuperDepartmentId, superDepartments])
-
-  const aisles = useMemo(() => {
-    if (selectedDepartmentId) {
-      const aislesData = departments.find((d) => d.id === selectedDepartmentId)?.children || []
-      console.log("Aisles derived:", aislesData)
-      return aislesData
+    if (currentLevel === "departmentTabs" && selectedSuperDepartmentId) {
+      const superDept = superDepartmentsData?.find((dept) => dept.id === selectedSuperDepartmentId)
+      return superDept?.name || "Departments"
     }
-    return []
-  }, [selectedDepartmentId, departments])
-
-  const shelves = useMemo(() => {
-    if (selectedAisleId) {
-      const shelvesData = aisles.find((a) => a.id === selectedAisleId)?.children || []
-      console.log("Shelves derived:", shelvesData)
-      return shelvesData
+    if (currentLevel === "aisleProductsWithTabs" && selectedDepartmentId) {
+      const superDept = superDepartmentsData?.find((dept) => dept.id === selectedSuperDepartmentId)
+      const department = superDept?.children?.find((dept) => dept.id === selectedDepartmentId)
+      return department?.name || "Aisles"
     }
-    return []
-  }, [selectedAisleId, aisles])
+    if (currentLevel === "shelfProducts" && selectedShelfId) {
+      const superDept = superDepartmentsData?.find((dept) => dept.id === selectedSuperDepartmentId)
+      const department = superDept?.children?.find((dept) => dept.id === selectedDepartmentId)
+      const aisle = department?.children?.find((aisle) => aisle.id === selectedAisleIdForTabs)
+      const shelf = aisle?.children?.find((shelf) => shelf.id === selectedShelfId)
+      return shelf?.name || "Products"
+    }
+    if (currentLevel === "offersProducts") {
+      return "Special Offers"
+    }
+    return "Shop by Category"
+  }
 
   const handleSuperDepartmentSelect = (id: string) => {
     setSelectedSuperDepartmentId(id)
-    setSelectedDepartmentId(null)
-    setSelectedAisleId(null)
-    setSelectedShelfId(null)
-    setCurrentLevel("superDepartment")
-    console.log("Selected SuperDepartment:", id)
+    setCurrentLevel("departmentTabs")
   }
 
-  const handleDepartmentSelect = (id: string) => {
+  const handleDepartmentTabSelect = (id: string) => {
     setSelectedDepartmentId(id)
-    setSelectedAisleId(null)
-    setSelectedShelfId(null)
-    
-    // Find the selected department to check its children (aisles)
-    const selectedDepartment = departments.find((d) => d.id === id)
-    const aislesForDepartment = selectedDepartment?.children || []
-
-    // Check if this department has no children (aisles) - if so, show products directly
-    if (aislesForDepartment.length === 0) {
-      setCurrentLevel("aisleProducts") // Show products for this department
-      fetchProducts(id) // Fetch products for the department
-      console.log("Selected Department has no aisles, fetching products directly for department:", id)
-      return
-    }
-
-    setCurrentLevel("department")
-    console.log("Selected Department:", id)
+    setCurrentLevel("aisleProductsWithTabs")
   }
 
-  const handleAisleSelect = (id: string) => {
-    setSelectedAisleId(id)
-    setSelectedShelfId(null) // Clear shelf selection
-    setSelectedShelfTabId("all") // Reset tab selection to 'all'
-
-    // Find the selected aisle to check its children (shelves)
-    const selectedAisle = aisles.find((a) => a.id === id)
-    const shelvesForAisle = selectedAisle?.children || []
-
-    // Check if this aisle has no children (shelves) - if so, show products directly
-    if (shelvesForAisle.length === 0) {
-      setCurrentLevel("aisleProducts") // Show products for this aisle
-      fetchProducts(id) // Fetch products for the aisle
-      console.log("Selected Aisle has no shelves, fetching products directly for aisle:", id)
-      return
-    }
-
-    // Modify the conditional logic for navigation
-    if (showAisleProductsDirectly || shelvesForAisle.length === 1) {
-      setCurrentLevel("aisleProducts") // New level for aisle-level products
-      fetchProducts(id) // Fetch products for the aisle
-      console.log("Selected Aisle, fetching products for aisle:", id)
-    } else {
-      setCurrentLevel("aisle") // Go to shelf grid
-      console.log("Selected Aisle, navigating to shelves for:", id)
-    }
+  const handleAisleSelectForProducts = (aisleId: string) => {
+    setSelectedAisleIdForTabs(aisleId)
+    setCurrentLevel("aisleProductsWithTabs")
   }
 
-  const handleShelfSelect = (id: string) => {
-    setSelectedShelfId(id)
-    setCurrentLevel("products")
-    fetchProducts(id)
-    console.log("Selected Shelf, fetching products for:", id)
+  const handleShelfSelectForProducts = (shelfId: string) => {
+    setSelectedShelfId(shelfId)
+    setCurrentLevel("shelfProducts")
   }
 
   const handleShelfTabClick = (id: string) => {
     setSelectedShelfTabId(id)
-    if (id === "all") {
-      fetchProducts(selectedAisleId!) // Fetch all products for the aisle
-    } else {
-      fetchProducts(id) // Fetch products for the specific shelf
+    if (id !== "all") {
+      handleShelfSelectForProducts(id)
     }
   }
 
   const handleSpecialOffersClick = (categoryId: string, categoryName: string) => {
     setCurrentLevel("offersProducts")
-    fetchProducts(categoryId, true) // Fetch products with offers: true
-    console.log(`Fetching special offers for ${categoryName} (ID: ${categoryId})`)
-  }
-
-  const handleResetToAPI = () => {
-    localStorage.removeItem('customTaxonomy')
-    setUsingCustomTaxonomy(false)
-    setTaxonomyData(null)
-    setSelectedSuperDepartmentId(null)
-    setSelectedDepartmentId(null)
-    setSelectedAisleId(null)
-    setSelectedShelfId(null)
-    setCurrentLevel("superDepartment")
-    fetchTaxonomy()
-  }
-
-  const handleRefreshCustom = () => {
-    // Reload custom taxonomy from localStorage
-    try {
-      const customTaxonomyData = localStorage.getItem('customTaxonomy')
-      if (customTaxonomyData) {
-        const parsedData = JSON.parse(customTaxonomyData)
-        setTaxonomyData(parsedData)
-        setUsingCustomTaxonomy(true)
-        setSelectedSuperDepartmentId(null)
-        setSelectedDepartmentId(null)
-        setSelectedAisleId(null)
-        setSelectedShelfId(null)
-        setCurrentLevel("superDepartment")
-        console.log("Custom taxonomy refreshed from localStorage:", parsedData)
-      } else {
-        // No custom taxonomy, load from API
-        handleResetToAPI()
-      }
-    } catch (error) {
-      console.error("Error refreshing custom taxonomy:", error)
-      handleResetToAPI()
-    }
   }
 
   const handleBack = () => {
-    if (currentLevel === "products") {
-      setCurrentLevel("aisle")
-      setProductData(null)
-      console.log("Navigating back from Shelf Products to Aisle level.")
-    } else if (currentLevel === "aisleProducts") {
-      setCurrentLevel("department") // From aisle products, go back to department grid
-      setProductData(null)
-      console.log("Navigating back from Aisle Products to Department level.")
+    if (currentLevel === "departmentTabs") {
+      setCurrentLevel("superDepartmentGrid")
+      setSelectedSuperDepartmentId(null)
+    } else if (currentLevel === "aisleProductsWithTabs") {
+      setCurrentLevel("departmentTabs")
+      setSelectedDepartmentId(null)
+    } else if (currentLevel === "shelfProducts") {
+      setCurrentLevel("aisleProductsWithTabs")
+      setSelectedShelfId(null)
+      setSelectedShelfTabId("all")
     } else if (currentLevel === "offersProducts") {
-      // Handle back from offers based on the deepest selected category
-      if (selectedShelfId) {
-        setCurrentLevel("shelf")
-      } else if (selectedAisleId) {
-        setCurrentLevel("aisle")
-      } else if (selectedDepartmentId) {
-        setCurrentLevel("department")
-      } else if (selectedSuperDepartmentId) {
-        setCurrentLevel("superDepartment") // Go back to superDepartment if offers were from there
-      }
-      setProductData(null)
-      console.log("Navigating back from Special Offers.")
-    } else if (currentLevel === "shelf") {
-      setCurrentLevel("aisle")
-      console.log("Navigating back from Shelf Grid to Aisle level.")
-    } else if (currentLevel === "aisle") {
-      setCurrentLevel("department")
-      console.log("Navigating back from Aisle Grid to Department level.")
-    } else if (currentLevel === "department") {
-      setCurrentLevel("superDepartment")
-      console.log("Navigating back from Department Grid to SuperDepartment level.")
+      setCurrentLevel("superDepartmentGrid")
     }
   }
 
-  const getHeaderTitle = () => {
-    switch (currentLevel) {
-      case "superDepartment":
-        return "" // Removed "Shop all categories" title for superDepartment level
-      case "department":
-        return departments.find((d) => d.id === selectedDepartmentId)?.name || "Departments"
-      case "aisle":
-        return aisles.find((a) => a.id === selectedAisleId)?.name || "Aisles"
-      case "shelf":
-        return shelves.find((s) => s.id === selectedShelfId)?.name || "Shelves"
-      case "products":
-        // Show shelf name for products from a specific shelf
-        return shelves.find((s) => s.id === selectedShelfId)?.name || "Products"
-      case "aisleProducts":
-        // Show aisle name for products from an aisle (single shelf or direct toggle)
-        return aisles.find((a) => a.id === selectedAisleId)?.name || "Aisle Products"
-      case "offersProducts": // New title for offers
-        let offerCategoryName = "Category"
-        if (selectedShelfId) {
-          offerCategoryName = shelves.find((s) => s.id === selectedShelfId)?.name || "Shelf"
-        } else if (selectedAisleId) {
-          offerCategoryName = aisles.find((a) => a.id === selectedAisleId)?.name || "Aisle"
-        } else if (selectedDepartmentId) {
-          offerCategoryName = departments.find((d) => d.id === selectedDepartmentId)?.name || "Department"
-        } else if (selectedSuperDepartmentId) {
-          offerCategoryName =
-            superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "Super Department"
-        }
-        return `Special offers in ${offerCategoryName}`
-      default:
-        return "Tesco Taxonomy"
-    }
+  const renderSpecialOffersButton = () => {
+    if (currentLevel !== "superDepartmentGrid") return null
+
+    return (
+      <div className="mb-6">
+        <Button
+          onClick={() => handleSpecialOffersClick("", "Special Offers")}
+          className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-lg font-semibold"
+        >
+          🔥 Special Offers
+        </Button>
+      </div>
+    )
   }
 
-  const renderRightPanelContent = () => {
+  const renderContent = () => {
     if (loading) {
       return (
-        <div className="p-4 space-y-4">
-          <Skeleton className="h-8 w-3/4" />
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-64" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
           </div>
         </div>
       )
     }
 
     if (error) {
-      return <div className="p-4 text-red-500">Error: {error}</div>
-    }
-
-    switch (currentLevel) {
-      case "superDepartment":
-        if (departments.length === 0) {
-          return <div className="p-4 text-gray-500">No departments found for this category.</div>
-        }
-        return <DepartmentGrid departments={departments} onSelect={handleDepartmentSelect} />
-      case "department":
-        if (aisles.length === 0) {
-          return <div className="p-4 text-gray-500">No subcategories found. This category may contain products directly.</div>
-        }
-        return (
-          <AisleGrid
-            aisles={aisles}
-            onSelect={handleAisleSelect}
-            showAisleProductsDirectly={showAisleProductsDirectly}
-            onToggleChange={setShowAisleProductsDirectly}
-          />
-        )
-      case "aisle":
-        if (shelves.length === 0) {
-          return <div className="p-4 text-gray-500">No subcategories found. This category may contain products directly.</div>
-        }
-        return <ShelfGrid shelves={shelves} onSelect={handleShelfSelect} />
-      case "products":
-      case "aisleProducts":
-      case "offersProducts": // Handle offersProducts here
-        if (!productData || productData.category.productItems.length === 0) {
-          return (
-            <div className="p-4 text-gray-500">
-              No products found for this {currentLevel === "offersProducts" ? "offer category" : "selection"}.
-            </div>
-          )
-        }
-        return productData ? (
-          <ProductGrid
-            products={productData.category.productItems}
-            totalCount={productData.category.pageInformation.totalCount}
-          />
-        ) : (
-          <div className="p-4 text-gray-500">No products found.</div>
-        )
-      default:
-        return <div className="p-4 text-gray-500">Select a category to browse.</div>
-    }
-  }
-
-  const isSuperDepartmentLevel = currentLevel === "superDepartment"
-
-  const currentAisleShelves = useMemo(() => {
-    if (selectedAisleId) {
-      return aisles.find((a) => a.id === selectedAisleId)?.children || []
-    }
-    return []
-  }, [selectedAisleId, aisles])
-
-  const renderShelfTabs = () => {
-    if (currentLevel !== "aisleProducts") return null
-
-    return (
-      <ScrollArea className="w-full whitespace-nowrap h-12">
-        <div className="flex w-max space-x-4 px-4 py-2">
-          <Button
-            variant="ghost"
-            className={cn(
-              "pb-2 pt-0 h-auto rounded-none border-b-2 border-transparent min-w-[100px]",
-              selectedShelfTabId === "all" && "border-blue-500 text-blue-700",
-            )}
-            onClick={() => handleShelfTabClick("all")}
-          >
-            All
-          </Button>
-          {currentAisleShelves.map((shelf) => (
-            <Button
-              key={shelf.id}
-              variant="ghost"
-              className={cn(
-                "pb-2 pt-0 h-auto rounded-none border-b-2 border-transparent min-w-[100px]",
-                selectedShelfTabId === shelf.id && "border-blue-500 text-blue-700",
-              )}
-              onClick={() => handleShelfTabClick(shelf.id)}
-            >
-              {shelf.name}
-            </Button>
-          ))}
-        </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
-    )
-  }
-
-  const renderSpecialOffersButton = () => {
-    let categoryId: string | null = null
-    let categoryName: string | null = null
-
-    if (currentLevel === "superDepartment" && selectedSuperDepartmentId) {
-      categoryId = selectedSuperDepartmentId
-      categoryName = superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "this category"
-    } else if (currentLevel === "department" && selectedDepartmentId) {
-      categoryId = selectedDepartmentId
-      categoryName = departments.find((d) => d.id === selectedDepartmentId)?.name || "this department"
-    } else if (currentLevel === "aisle" && selectedAisleId) {
-      categoryId = selectedAisleId
-      categoryName = aisles.find((a) => a.id === selectedAisleId)?.name || "this aisle"
-    } else if (currentLevel === "shelf" && selectedShelfId) {
-      categoryId = selectedShelfId
-      categoryName = shelves.find((s) => s.id === selectedShelfId)?.name || "this shelf"
-    }
-
-    if (categoryId && categoryName) {
       return (
-        <div className="p-4 pt-0">
-          <Button
-            onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
-            className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
-          >
-            Special offers in {categoryName}
-          </Button>
+        <Alert>
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )
+    }
+
+    if (currentLevel === "superDepartmentGrid" && superDepartmentsData) {
+      return <SuperDepartmentGrid superDepartments={superDepartmentsData} onSelect={handleSuperDepartmentSelect} />
+    }
+
+    if (currentLevel === "departmentTabs" && selectedSuperDepartmentId && superDepartmentsData) {
+      const selectedSuperDepartment = superDepartmentsData.find((dept) => dept.id === selectedSuperDepartmentId)
+      if (selectedSuperDepartment?.children) {
+        return (
+          <DepartmentTabsContent
+            selectedDepartmentId={selectedDepartmentId}
+            departments={selectedSuperDepartment.children}
+            onSelectAisleForProducts={handleAisleSelectForProducts}
+            onSelectShelfForProducts={handleShelfSelectForProducts}
+          />
+        )
+      }
+    }
+
+    if (currentLevel === "aisleProductsWithTabs" && selectedDepartmentId && superDepartmentsData) {
+      const selectedSuperDepartment = superDepartmentsData.find((dept) => dept.id === selectedSuperDepartmentId)
+      const selectedDepartment = selectedSuperDepartment?.children?.find((dept) => dept.id === selectedDepartmentId)
+      if (selectedDepartment?.children) {
+        // For now, show a simple message - this would need proper product fetching logic
+        return (
+          <div className="p-4">
+            <h3 className="text-lg font-semibold mb-4">Aisles in {selectedDepartment.name}</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {selectedDepartment.children.map((aisle) => (
+                <div
+                  key={aisle.id}
+                  className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
+                  onClick={() => handleAisleSelectForProducts(aisle.id)}
+                >
+                  <h4 className="font-medium">{aisle.name}</h4>
+                  <p className="text-sm text-gray-600">{aisle.children?.length || 0} shelves</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+    }
+
+    if (currentLevel === "shelfProducts" && selectedShelfId) {
+      // For now, show a simple message - this would need proper product fetching logic
+      return (
+        <div className="p-4">
+          <h3 className="text-lg font-semibold mb-4">Products</h3>
+          <p className="text-gray-600">Product listing would be shown here for shelf ID: {selectedShelfId}</p>
         </div>
       )
     }
-    return null
+
+    if (currentLevel === "offersProducts") {
+      return (
+        <div className="text-center py-8">
+          <h2 className="text-2xl font-bold mb-4">Special Offers</h2>
+          <p className="text-gray-600">Special offers functionality would be implemented here.</p>
+        </div>
+      )
+    }
+
+    return <div>No content available</div>
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      {/* Left Panel - SuperDepartments */}
-      <div className={cn("transition-all duration-300 ease-in-out", isSuperDepartmentLevel ? "w-1/3" : "w-0 hidden")}>
-        {loading && (
-          <div className="p-2 space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
-        {error && (
-          <div className="p-2">
-            <Alert variant="destructive">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          </div>
-        )}
-        {!loading && !error && superDepartments.length === 0 && (
-          <div className="p-4 text-gray-500">No super departments found.</div>
-        )}
-        {!loading && !error && superDepartments.length > 0 && (
-          <SuperDepartmentList
-            superDepartments={superDepartments}
-            selectedSuperDepartmentId={selectedSuperDepartmentId}
-            onSelect={handleSuperDepartmentSelect}
-          />
-        )}
-      </div>
-
-      {/* Right Panel - Dynamic Content */}
-      <div
-        className={cn(
-          "flex flex-col transition-all duration-300 ease-in-out",
-          isSuperDepartmentLevel ? "w-2/3" : "w-full",
-        )}
-      >
-        <NavigationHeader title={getHeaderTitle()} onBack={currentLevel !== "superDepartment" ? handleBack : undefined}>
-          {renderShelfTabs()} {/* Render tabs as children of the header */}
-          {renderSpecialOffersButton()} {/* Render the special offers button */}
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-6">
+        <NavigationHeader title={getHeaderTitle()} onBack={currentLevel !== "superDepartmentGrid" ? handleBack : undefined}>
+          {renderSpecialOffersButton()}
         </NavigationHeader>
-        {renderRightPanelContent()}
+        {renderContent()}
       </div>
     </div>
   )
