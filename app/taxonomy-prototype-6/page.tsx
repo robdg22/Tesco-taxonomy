@@ -691,21 +691,6 @@ export default function TaxonomyPrototype6Page() {
         )}
       >
         <NavigationHeader title={getHeaderTitle()} onBack={currentLevel !== "superDepartment" ? handleBack : undefined}>
-          {usingCustomTaxonomy && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b">
-              <span className="text-sm text-blue-700">Using custom taxonomy</span>
-              <Link href="/taxonomy-test">
-                <Button variant="outline" size="sm" className="h-6 text-xs">
-                  <Edit3 className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-              </Link>
-              <Button variant="outline" size="sm" className="h-6 text-xs" onClick={handleRefreshCustom}>
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Refresh
-              </Button>
-            </div>
-          )}
           {renderShelfTabs()} {/* Render tabs as children of the header */}
           {renderSpecialOffersButton()} {/* Render the special offers button */}
         </NavigationHeader>
