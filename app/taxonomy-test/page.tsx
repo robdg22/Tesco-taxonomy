@@ -159,6 +159,8 @@ export default function TaxonomyTestPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
+      // Clean up storage first to prevent quota issues
+      cleanupOldTaxonomies()
       loadSavedTaxonomies()
       loadFromOnline()
     }
@@ -272,6 +274,73 @@ export default function TaxonomyTestPage() {
 
   const canUndo = historyIndex >= 0
 
+  // Storage management utilities
+  const getStorageSize = () => {
+    let total = 0
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        total += localStorage[key].length + key.length
+      }
+    }
+    return total
+  }
+
+  const getStorageSizeFormatted = () => {
+    const bytes = getStorageSize()
+    return `${(bytes / 1024).toFixed(1)}KB`
+  }
+
+  const cleanupOldTaxonomies = () => {
+    try {
+      // Remove any old storage format data
+      localStorage.removeItem('savedTaxonomies')
+      localStorage.removeItem('editedTaxonomy')
+      
+      // Clean up any orphaned taxonomy keys (not in index)
+      const indexData = localStorage.getItem('taxonomyIndex')
+      if (indexData) {
+        const taxonomyIndex = JSON.parse(indexData)
+        const validIds = new Set(taxonomyIndex.map((t: any) => t.id))
+        
+        const keysToRemove = []
+        for (let key in localStorage) {
+          if (key.startsWith('taxonomy_')) {
+            const id = key.replace('taxonomy_', '')
+            if (!validIds.has(id)) {
+              keysToRemove.push(key)
+            }
+          }
+        }
+        
+        keysToRemove.forEach(key => {
+          localStorage.removeItem(key)
+          console.log(`Cleaned up orphaned taxonomy: ${key}`)
+        })
+        
+        if (keysToRemove.length > 0) {
+          console.log(`Cleaned up ${keysToRemove.length} orphaned taxonomies`)
+        }
+      }
+    } catch (error) {
+      console.error("Error during cleanup:", error)
+    }
+  }
+
+  const checkStorageQuota = (dataSize: number) => {
+    const currentSize = getStorageSize()
+    const estimatedNewSize = currentSize + dataSize
+    const quotaLimit = 5 * 1024 * 1024 // 5MB typical localStorage limit
+    
+    console.log(`Storage check: Current ${(currentSize / 1024).toFixed(1)}KB, Adding ${(dataSize / 1024).toFixed(1)}KB, Estimated ${(estimatedNewSize / 1024).toFixed(1)}KB`)
+    
+    if (estimatedNewSize > quotaLimit * 0.9) { // 90% threshold
+      console.warn("Approaching storage quota limit")
+      cleanupOldTaxonomies()
+      return false
+    }
+    return true
+  }
+
   const saveTaxonomyToCollection = (name: string, makeActive: boolean = true) => {
     if (!editedData) return
 
@@ -293,6 +362,13 @@ export default function TaxonomyTestPage() {
     }
 
     try {
+      // Check storage quota before saving
+      const taxonomyDataSize = JSON.stringify(newTaxonomy).length
+      if (!checkStorageQuota(taxonomyDataSize)) {
+        alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
+        return
+      }
+
       // Save individual taxonomy to its own localStorage key
       const taxonomyKey = `taxonomy_${newTaxonomy.id}`
       localStorage.setItem(taxonomyKey, JSON.stringify(newTaxonomy))
@@ -326,11 +402,16 @@ export default function TaxonomyTestPage() {
       setShowSaveDialog(false)
       setNewTaxonomyName("")
       
-      console.log(`Successfully saved taxonomy: ${name} (${(JSON.stringify(cleanedData).length / 1024).toFixed(1)}KB)`)
+      console.log(`Successfully saved taxonomy: ${name} (${(taxonomyDataSize / 1024).toFixed(1)}KB). Total storage: ${getStorageSizeFormatted()}`)
       
     } catch (error) {
       console.error("Error saving taxonomy:", error)
-      alert("Failed to save taxonomy. Storage may be full.")
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
+        cleanupOldTaxonomies()
+      } else {
+        alert("Failed to save taxonomy. Please try again.")
+      }
     }
   }
 
@@ -824,15 +905,37 @@ export default function TaxonomyTestPage() {
 
         const cleanedData = removeParentIds(editedData)
         
-        // Update the current taxonomy
+        // Update the current taxonomy using individual storage
         const updatedTaxonomies = savedTaxonomies.map(t => 
           t.id === currentTaxonomyId 
             ? { ...t, data: cleanedData }
             : t
         )
         
+        // Save the updated taxonomy individually
+        const updatedTaxonomy = updatedTaxonomies.find(t => t.id === currentTaxonomyId)
+        if (updatedTaxonomy) {
+          // Check storage quota before saving
+          const taxonomyDataSize = JSON.stringify(updatedTaxonomy).length
+          if (!checkStorageQuota(taxonomyDataSize)) {
+            alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
+            return
+          }
+
+          const taxonomyKey = `taxonomy_${currentTaxonomyId}`
+          localStorage.setItem(taxonomyKey, JSON.stringify(updatedTaxonomy))
+          
+          // Update the taxonomy index (lightweight metadata only)
+          const taxonomyIndex = updatedTaxonomies.map(t => ({
+            id: t.id,
+            name: t.name,
+            createdAt: t.createdAt,
+            isActive: t.isActive
+          }))
+          localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
+        }
+        
         setSavedTaxonomies(updatedTaxonomies)
-        localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
         
         // If this is the active taxonomy, also save to online API
         const currentTaxonomy = updatedTaxonomies.find(t => t.id === currentTaxonomyId)
@@ -842,8 +945,17 @@ export default function TaxonomyTestPage() {
         
         setHasChanges(false)
         setPendingReset(false)
+        
+        console.log(`Successfully updated taxonomy: ${currentTaxonomy?.name} (${(JSON.stringify(cleanedData).length / 1024).toFixed(1)}KB). Total storage: ${getStorageSizeFormatted()}`)
+        
       } catch (error) {
         console.error("Error saving taxonomy:", error)
+        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+          alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
+          cleanupOldTaxonomies()
+        } else {
+          alert("Failed to save taxonomy. Please try again.")
+        }
       } finally {
         setSaving(false)
       }
@@ -1064,6 +1176,11 @@ export default function TaxonomyTestPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
+            
+            {/* Storage Status */}
+            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              Storage: {getStorageSizeFormatted()}
+            </div>
             
             {/* Taxonomy Selection */}
             <div className="flex items-center gap-2">
