@@ -122,6 +122,102 @@ export default function TaxonomyTestPage() {
   const [newTaxonomyName, setNewTaxonomyName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
 
+  // Pin code protection
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [pinInput, setPinInput] = useState("")
+  const [pinError, setPinError] = useState(false)
+
+  const CORRECT_PIN = "2430"
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pinInput === CORRECT_PIN) {
+      setIsAuthenticated(true)
+      setPinError(false)
+      // Store authentication in sessionStorage (expires when browser closes)
+      sessionStorage.setItem('taxonomyEditorAuth', 'true')
+    } else {
+      setPinError(true)
+      setPinInput("")
+      setTimeout(() => setPinError(false), 2000)
+    }
+  }
+
+  const handlePinKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handlePinSubmit(e as any)
+    }
+  }
+
+  useEffect(() => {
+    // Check if already authenticated in this session
+    const isAuth = sessionStorage.getItem('taxonomyEditorAuth') === 'true'
+    if (isAuth) {
+      setIsAuthenticated(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadSavedTaxonomies()
+      loadFromOnline()
+    }
+  }, [isAuthenticated])
+
+  // Show pin entry screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Taxonomy Editor</h1>
+              <p className="text-gray-600">Enter PIN to access</p>
+            </div>
+            
+            <form onSubmit={handlePinSubmit} className="space-y-4">
+              <div>
+                <Input
+                  type="password"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  onKeyPress={handlePinKeyPress}
+                  placeholder="Enter 4-digit PIN"
+                  className={`text-center text-lg tracking-widest ${pinError ? 'border-red-500' : ''}`}
+                  maxLength={4}
+                  autoFocus
+                />
+                {pinError && (
+                  <p className="text-red-500 text-sm mt-2 text-center">
+                    Incorrect PIN. Please try again.
+                  </p>
+                )}
+              </div>
+              
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={pinInput.length !== 4}
+              >
+                Access Editor
+              </Button>
+            </form>
+            
+            <div className="mt-6 text-center">
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/')}
+                className="text-sm"
+              >
+                ← Back to Home
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const prototypes = [
     { value: "/taxonomy-prototype-1", label: "Prototype 1 - Basic Tesco API" },
     { value: "/taxonomy-prototype-2", label: "Prototype 2 - SuperDept → Dept Tabs → Aisle Products" },
@@ -176,38 +272,6 @@ export default function TaxonomyTestPage() {
 
   const canUndo = historyIndex >= 0
 
-  useEffect(() => {
-    loadSavedTaxonomies()
-    loadFromOnline()
-  }, [])
-
-  const loadSavedTaxonomies = () => {
-    try {
-      const saved = localStorage.getItem('savedTaxonomies')
-      if (saved) {
-        const taxonomies: SavedTaxonomy[] = JSON.parse(saved)
-        setSavedTaxonomies(taxonomies)
-        
-        // Find active taxonomy
-        const activeTaxonomy = taxonomies.find(t => t.isActive)
-        if (activeTaxonomy) {
-          setCurrentTaxonomyId(activeTaxonomy.id)
-        }
-        
-        console.log(`Loaded ${taxonomies.length} saved taxonomies`)
-      }
-    } catch (error) {
-      console.error("Error loading saved taxonomies:", error)
-      // Clear corrupted data
-      try {
-        localStorage.removeItem('savedTaxonomies')
-        console.log("Cleared corrupted taxonomy data")
-      } catch (clearError) {
-        console.error("Could not clear corrupted data:", clearError)
-      }
-    }
-  }
-
   const saveTaxonomyToCollection = (name: string, makeActive: boolean = true) => {
     if (!editedData) return
 
@@ -228,42 +292,33 @@ export default function TaxonomyTestPage() {
       isActive: makeActive
     }
 
-    const updatedTaxonomies = savedTaxonomies.map(t => ({
-      ...t,
-      isActive: makeActive ? false : t.isActive
-    }))
-    updatedTaxonomies.push(newTaxonomy)
-
     try {
-      // Check if we have too many taxonomies and remove oldest ones
-      let taxonomiesToSave = updatedTaxonomies
-      if (taxonomiesToSave.length > 10) {
-        // Keep only the 10 most recent taxonomies
-        taxonomiesToSave = taxonomiesToSave
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 10)
+      // Save individual taxonomy to its own localStorage key
+      const taxonomyKey = `taxonomy_${newTaxonomy.id}`
+      localStorage.setItem(taxonomyKey, JSON.stringify(newTaxonomy))
+      
+      // Update the taxonomy index (just metadata, not the full data)
+      const updatedTaxonomies = savedTaxonomies.map(t => ({
+        ...t,
+        isActive: makeActive ? false : t.isActive
+      }))
+      
+      // Add new taxonomy metadata to index
+      const newTaxonomyMeta = {
+        id: newTaxonomy.id,
+        name: newTaxonomy.name,
+        createdAt: newTaxonomy.createdAt,
+        isActive: newTaxonomy.isActive
       }
+      updatedTaxonomies.push(newTaxonomyMeta as SavedTaxonomy)
 
-      const dataToSave = JSON.stringify(taxonomiesToSave)
-      
-      // Check approximate size (rough estimate)
-      const sizeInBytes = new Blob([dataToSave]).size
-      const sizeInMB = sizeInBytes / (1024 * 1024)
-      
-      console.log(`Saving ${taxonomiesToSave.length} taxonomies, approximate size: ${sizeInMB.toFixed(2)}MB`)
-      
-      if (sizeInMB > 4) {
-        // If too large, keep only 5 most recent
-        taxonomiesToSave = taxonomiesToSave.slice(0, 5)
-        console.log(`Data too large, reduced to ${taxonomiesToSave.length} taxonomies`)
-      }
-
-      localStorage.setItem('savedTaxonomies', JSON.stringify(taxonomiesToSave))
-      setSavedTaxonomies(taxonomiesToSave)
+      // Save taxonomy index (lightweight metadata only)
+      localStorage.setItem('taxonomyIndex', JSON.stringify(updatedTaxonomies))
+      setSavedTaxonomies(updatedTaxonomies as SavedTaxonomy[])
       
       if (makeActive) {
         setCurrentTaxonomyId(newTaxonomy.id)
-        // Also save as the active taxonomy for prototypes
+        // Only save the ACTIVE taxonomy to online API (respects 4.5MB limit)
         saveToOnlineAPI(cleanedData)
       }
       
@@ -271,27 +326,52 @@ export default function TaxonomyTestPage() {
       setShowSaveDialog(false)
       setNewTaxonomyName("")
       
-      console.log(`Successfully saved taxonomy: ${name}`)
+      console.log(`Successfully saved taxonomy: ${name} (${(JSON.stringify(cleanedData).length / 1024).toFixed(1)}KB)`)
       
     } catch (error) {
-      console.error("Error saving taxonomy to localStorage:", error)
-      
-      // Try to save with reduced data
+      console.error("Error saving taxonomy:", error)
+      alert("Failed to save taxonomy. Storage may be full.")
+    }
+  }
+
+  const loadSavedTaxonomies = () => {
+    try {
+      const indexData = localStorage.getItem('taxonomyIndex')
+      if (indexData) {
+        const taxonomyIndex = JSON.parse(indexData)
+        
+        // Load full data for each taxonomy from individual storage
+        const fullTaxonomies = taxonomyIndex.map((meta: any) => {
+          try {
+            const taxonomyData = localStorage.getItem(`taxonomy_${meta.id}`)
+            if (taxonomyData) {
+              return JSON.parse(taxonomyData)
+            }
+            return null
+          } catch (error) {
+            console.error(`Error loading taxonomy ${meta.id}:`, error)
+            return null
+          }
+        }).filter(Boolean)
+        
+        setSavedTaxonomies(fullTaxonomies)
+        
+        // Find active taxonomy
+        const activeTaxonomy = fullTaxonomies.find((t: SavedTaxonomy) => t.isActive)
+        if (activeTaxonomy) {
+          setCurrentTaxonomyId(activeTaxonomy.id)
+        }
+        
+        console.log(`Loaded ${fullTaxonomies.length} saved taxonomies`)
+      }
+    } catch (error) {
+      console.error("Error loading saved taxonomies:", error)
+      // Clear corrupted data
       try {
-        // Keep only the most essential data
-        const minimalTaxonomies = updatedTaxonomies.slice(-3).map(t => ({
-          ...t,
-          data: t.data.slice(0, 20) // Keep only first 20 categories
-        }))
-        
-        localStorage.setItem('savedTaxonomies', JSON.stringify(minimalTaxonomies))
-        setSavedTaxonomies(minimalTaxonomies)
-        
-        alert("Saved with reduced data due to storage limitations. Consider deleting old taxonomies.")
-        
-      } catch (fallbackError) {
-        console.error("Failed to save even with reduced data:", fallbackError)
-        alert("Failed to save taxonomy. Your browser's storage may be full. Try deleting some taxonomies or clearing browser data.")
+        localStorage.removeItem('taxonomyIndex')
+        console.log("Cleared corrupted taxonomy index")
+      } catch (clearError) {
+        console.error("Could not clear corrupted data:", clearError)
       }
     }
   }
@@ -311,16 +391,30 @@ export default function TaxonomyTestPage() {
   }
 
   const setActiveTaxonomy = async (taxonomyId: string) => {
-    const updatedTaxonomies = savedTaxonomies.map(t => ({
-      ...t,
-      isActive: t.id === taxonomyId
-    }))
-    
     try {
-      setSavedTaxonomies(updatedTaxonomies)
-      localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
+      // Update all taxonomies to set new active status
+      const updatedTaxonomies = savedTaxonomies.map(t => ({
+        ...t,
+        isActive: t.id === taxonomyId
+      }))
       
-      // Save the active taxonomy to online API for prototypes 4-6
+      // Save each updated taxonomy individually
+      for (const taxonomy of updatedTaxonomies) {
+        const taxonomyKey = `taxonomy_${taxonomy.id}`
+        localStorage.setItem(taxonomyKey, JSON.stringify(taxonomy))
+      }
+      
+      // Update index
+      const taxonomyIndex = updatedTaxonomies.map(t => ({
+        id: t.id,
+        name: t.name,
+        createdAt: t.createdAt,
+        isActive: t.isActive
+      }))
+      localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
+      setSavedTaxonomies(updatedTaxonomies)
+      
+      // Save ONLY the active taxonomy to online API (respects blob limit)
       const activeTaxonomy = updatedTaxonomies.find(t => t.isActive)
       if (activeTaxonomy) {
         await saveToOnlineAPI(activeTaxonomy.data)
@@ -329,15 +423,25 @@ export default function TaxonomyTestPage() {
       console.log(`Set taxonomy ${taxonomyId} as active`)
     } catch (error) {
       console.error("Error setting active taxonomy:", error)
-      alert("Failed to save active taxonomy setting. Storage may be full.")
+      alert("Failed to save active taxonomy setting.")
     }
   }
 
   const deleteTaxonomy = (taxonomyId: string) => {
     try {
+      // Remove individual taxonomy from localStorage
+      localStorage.removeItem(`taxonomy_${taxonomyId}`)
+      
+      // Update index
       const updatedTaxonomies = savedTaxonomies.filter(t => t.id !== taxonomyId)
+      const taxonomyIndex = updatedTaxonomies.map(t => ({
+        id: t.id,
+        name: t.name,
+        createdAt: t.createdAt,
+        isActive: t.isActive
+      }))
+      localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
       setSavedTaxonomies(updatedTaxonomies)
-      localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
       
       if (currentTaxonomyId === taxonomyId) {
         setCurrentTaxonomyId("")
@@ -347,7 +451,7 @@ export default function TaxonomyTestPage() {
       console.log(`Deleted taxonomy ${taxonomyId}`)
     } catch (error) {
       console.error("Error deleting taxonomy:", error)
-      alert("Failed to delete taxonomy. Storage may have issues.")
+      alert("Failed to delete taxonomy.")
     }
   }
 
