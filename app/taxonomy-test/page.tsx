@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save, Hash, Image, EyeOff, Eye, ExternalLink, Undo } from "lucide-react"
+import { RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save, Hash, Image, EyeOff, Eye, ExternalLink, Undo, Plus, Trash2, Check } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { graphqlRequest } from "@/lib/graphql-client"
 import type { GetTaxonomyResponse, TaxonomyItem } from "@/types/tesco"
@@ -90,6 +90,14 @@ interface CategoryWithParent extends TaxonomyItem {
   hidden?: boolean
 }
 
+interface SavedTaxonomy {
+  id: string
+  name: string
+  data: TaxonomyItem[]
+  createdAt: string
+  isActive: boolean
+}
+
 export default function TaxonomyTestPage() {
   const router = useRouter()
   const [originalData, setOriginalData] = useState<TaxonomyItem[] | null>(null)
@@ -107,6 +115,12 @@ export default function TaxonomyTestPage() {
   const [selectedPrototype, setSelectedPrototype] = useState<string>("")
   const [history, setHistory] = useState<CategoryWithParent[][]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  
+  // Multi-taxonomy state
+  const [savedTaxonomies, setSavedTaxonomies] = useState<SavedTaxonomy[]>([])
+  const [currentTaxonomyId, setCurrentTaxonomyId] = useState<string>("")
+  const [newTaxonomyName, setNewTaxonomyName] = useState("")
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
 
   const prototypes = [
     { value: "/taxonomy-prototype-1", label: "Prototype 1 - Basic Tesco API" },
@@ -163,8 +177,193 @@ export default function TaxonomyTestPage() {
   const canUndo = historyIndex >= 0
 
   useEffect(() => {
+    loadSavedTaxonomies()
     loadFromOnline()
   }, [])
+
+  const loadSavedTaxonomies = () => {
+    try {
+      const saved = localStorage.getItem('savedTaxonomies')
+      if (saved) {
+        const taxonomies: SavedTaxonomy[] = JSON.parse(saved)
+        setSavedTaxonomies(taxonomies)
+        
+        // Find active taxonomy
+        const activeTaxonomy = taxonomies.find(t => t.isActive)
+        if (activeTaxonomy) {
+          setCurrentTaxonomyId(activeTaxonomy.id)
+        }
+        
+        console.log(`Loaded ${taxonomies.length} saved taxonomies`)
+      }
+    } catch (error) {
+      console.error("Error loading saved taxonomies:", error)
+      // Clear corrupted data
+      try {
+        localStorage.removeItem('savedTaxonomies')
+        console.log("Cleared corrupted taxonomy data")
+      } catch (clearError) {
+        console.error("Could not clear corrupted data:", clearError)
+      }
+    }
+  }
+
+  const saveTaxonomyToCollection = (name: string, makeActive: boolean = true) => {
+    if (!editedData) return
+
+    const removeParentIds = (categories: any[]): any[] => {
+      return categories.map(category => ({
+        ...category,
+        parentId: undefined,
+        children: category.children ? removeParentIds(category.children) : []
+      }))
+    }
+
+    const cleanedData = removeParentIds(editedData)
+    const newTaxonomy: SavedTaxonomy = {
+      id: Date.now().toString(),
+      name: name.trim(),
+      data: cleanedData,
+      createdAt: new Date().toISOString(),
+      isActive: makeActive
+    }
+
+    const updatedTaxonomies = savedTaxonomies.map(t => ({
+      ...t,
+      isActive: makeActive ? false : t.isActive
+    }))
+    updatedTaxonomies.push(newTaxonomy)
+
+    try {
+      // Check if we have too many taxonomies and remove oldest ones
+      let taxonomiesToSave = updatedTaxonomies
+      if (taxonomiesToSave.length > 10) {
+        // Keep only the 10 most recent taxonomies
+        taxonomiesToSave = taxonomiesToSave
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 10)
+      }
+
+      const dataToSave = JSON.stringify(taxonomiesToSave)
+      
+      // Check approximate size (rough estimate)
+      const sizeInBytes = new Blob([dataToSave]).size
+      const sizeInMB = sizeInBytes / (1024 * 1024)
+      
+      console.log(`Saving ${taxonomiesToSave.length} taxonomies, approximate size: ${sizeInMB.toFixed(2)}MB`)
+      
+      if (sizeInMB > 4) {
+        // If too large, keep only 5 most recent
+        taxonomiesToSave = taxonomiesToSave.slice(0, 5)
+        console.log(`Data too large, reduced to ${taxonomiesToSave.length} taxonomies`)
+      }
+
+      localStorage.setItem('savedTaxonomies', JSON.stringify(taxonomiesToSave))
+      setSavedTaxonomies(taxonomiesToSave)
+      
+      if (makeActive) {
+        setCurrentTaxonomyId(newTaxonomy.id)
+        // Also save as the active taxonomy for prototypes
+        saveToOnlineAPI(cleanedData)
+      }
+      
+      setHasChanges(false)
+      setShowSaveDialog(false)
+      setNewTaxonomyName("")
+      
+      console.log(`Successfully saved taxonomy: ${name}`)
+      
+    } catch (error) {
+      console.error("Error saving taxonomy to localStorage:", error)
+      
+      // Try to save with reduced data
+      try {
+        // Keep only the most essential data
+        const minimalTaxonomies = updatedTaxonomies.slice(-3).map(t => ({
+          ...t,
+          data: t.data.slice(0, 20) // Keep only first 20 categories
+        }))
+        
+        localStorage.setItem('savedTaxonomies', JSON.stringify(minimalTaxonomies))
+        setSavedTaxonomies(minimalTaxonomies)
+        
+        alert("Saved with reduced data due to storage limitations. Consider deleting old taxonomies.")
+        
+      } catch (fallbackError) {
+        console.error("Failed to save even with reduced data:", fallbackError)
+        alert("Failed to save taxonomy. Your browser's storage may be full. Try deleting some taxonomies or clearing browser data.")
+      }
+    }
+  }
+
+  const loadTaxonomy = (taxonomyId: string) => {
+    const taxonomy = savedTaxonomies.find(t => t.id === taxonomyId)
+    if (taxonomy) {
+      const withParentIds = addParentIds(taxonomy.data)
+      setEditedData(withParentIds)
+      setCurrentTaxonomyId(taxonomyId)
+      setHasChanges(false)
+      
+      // Clear history when switching taxonomies
+      setHistory([])
+      setHistoryIndex(-1)
+    }
+  }
+
+  const setActiveTaxonomy = async (taxonomyId: string) => {
+    const updatedTaxonomies = savedTaxonomies.map(t => ({
+      ...t,
+      isActive: t.id === taxonomyId
+    }))
+    
+    try {
+      setSavedTaxonomies(updatedTaxonomies)
+      localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
+      
+      // Save the active taxonomy to online API for prototypes 4-6
+      const activeTaxonomy = updatedTaxonomies.find(t => t.isActive)
+      if (activeTaxonomy) {
+        await saveToOnlineAPI(activeTaxonomy.data)
+      }
+      
+      console.log(`Set taxonomy ${taxonomyId} as active`)
+    } catch (error) {
+      console.error("Error setting active taxonomy:", error)
+      alert("Failed to save active taxonomy setting. Storage may be full.")
+    }
+  }
+
+  const deleteTaxonomy = (taxonomyId: string) => {
+    try {
+      const updatedTaxonomies = savedTaxonomies.filter(t => t.id !== taxonomyId)
+      setSavedTaxonomies(updatedTaxonomies)
+      localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
+      
+      if (currentTaxonomyId === taxonomyId) {
+        setCurrentTaxonomyId("")
+        setEditedData(null)
+      }
+      
+      console.log(`Deleted taxonomy ${taxonomyId}`)
+    } catch (error) {
+      console.error("Error deleting taxonomy:", error)
+      alert("Failed to delete taxonomy. Storage may have issues.")
+    }
+  }
+
+  const saveToOnlineAPI = async (taxonomyData: TaxonomyItem[]) => {
+    try {
+      const response = await fetch('/api/taxonomy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taxonomy: taxonomyData })
+      })
+      return response.ok
+    } catch (error) {
+      console.error("Error saving to online API:", error)
+      return false
+    }
+  }
 
   const loadFromOnline = async () => {
     try {
@@ -174,21 +373,54 @@ export default function TaxonomyTestPage() {
       if (response.ok && result.data?.taxonomy) {
         const withParentIds = addParentIds(result.data.taxonomy)
         setEditedData(withParentIds)
+        console.log("Loaded online taxonomy:", withParentIds.length, "categories")
       } else {
+        // Try localStorage fallback
         const customTaxonomyData = localStorage.getItem('customTaxonomy')
         if (customTaxonomyData) {
           const parsedData = JSON.parse(customTaxonomyData)
           const withParentIds = addParentIds(parsedData)
           setEditedData(withParentIds)
+          console.log("Loaded from localStorage:", withParentIds.length, "categories")
+        } else {
+          // If no data available, load from API as fallback
+          console.log("No data found, loading from API...")
+          await loadAPITaxonomy()
         }
       }
     } catch (error) {
+      console.error("Error loading online taxonomy:", error)
+      // Try localStorage fallback
       const customTaxonomyData = localStorage.getItem('customTaxonomy')
       if (customTaxonomyData) {
         const parsedData = JSON.parse(customTaxonomyData)
         const withParentIds = addParentIds(parsedData)
         setEditedData(withParentIds)
+        console.log("Loaded from localStorage after error:", withParentIds.length, "categories")
+      } else {
+        // If no data available, load from API as fallback
+        console.log("No data found after error, loading from API...")
+        await loadAPITaxonomy()
       }
+    }
+  }
+
+  const loadAPITaxonomy = async () => {
+    try {
+      const variables = {
+        storeId: "3060",
+        categoryId: null,
+        style: "thumbnail",
+        includeInspirationEvents: false,
+      }
+      const result = await graphqlRequest<GetTaxonomyResponse>(TAXONOMY_QUERY, variables)
+      if (result.data?.taxonomy) {
+        const withParentIds = addParentIds(result.data.taxonomy)
+        setEditedData(withParentIds)
+        console.log("Loaded API taxonomy as fallback:", withParentIds.length, "categories")
+      }
+    } catch (error) {
+      console.error("Error loading API taxonomy:", error)
     }
   }
 
@@ -474,33 +706,46 @@ export default function TaxonomyTestPage() {
   const saveChanges = async () => {
     if (!editedData) return
     
-    setSaving(true)
-    try {
-      const removeParentIds = (categories: any[]): any[] => {
-        return categories.map(category => ({
-          ...category,
-          parentId: undefined,
-          children: category.children ? removeParentIds(category.children) : []
-        }))
-      }
+    if (currentTaxonomyId) {
+      // Update existing taxonomy
+      setSaving(true)
+      try {
+        const removeParentIds = (categories: any[]): any[] => {
+          return categories.map(category => ({
+            ...category,
+            parentId: undefined,
+            children: category.children ? removeParentIds(category.children) : []
+          }))
+        }
 
-      const cleanedData = removeParentIds(editedData)
-      
-      const response = await fetch('/api/taxonomy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taxonomy: cleanedData })
-      })
-
-      if (response.ok) {
-        localStorage.setItem('customTaxonomy', JSON.stringify(cleanedData))
+        const cleanedData = removeParentIds(editedData)
+        
+        // Update the current taxonomy
+        const updatedTaxonomies = savedTaxonomies.map(t => 
+          t.id === currentTaxonomyId 
+            ? { ...t, data: cleanedData }
+            : t
+        )
+        
+        setSavedTaxonomies(updatedTaxonomies)
+        localStorage.setItem('savedTaxonomies', JSON.stringify(updatedTaxonomies))
+        
+        // If this is the active taxonomy, also save to online API
+        const currentTaxonomy = updatedTaxonomies.find(t => t.id === currentTaxonomyId)
+        if (currentTaxonomy?.isActive) {
+          await saveToOnlineAPI(cleanedData)
+        }
+        
         setHasChanges(false)
         setPendingReset(false)
+      } catch (error) {
+        console.error("Error saving taxonomy:", error)
+      } finally {
+        setSaving(false)
       }
-    } catch (error) {
-      console.error("Error saving taxonomy:", error)
-    } finally {
-      setSaving(false)
+    } else {
+      // Show save dialog for new taxonomy
+      setShowSaveDialog(true)
     }
   }
 
@@ -713,7 +958,69 @@ export default function TaxonomyTestPage() {
     <div className="h-screen flex flex-col">
       <div className="flex-shrink-0 border-b bg-white p-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
+            
+            {/* Taxonomy Selection */}
+            <div className="flex items-center gap-2">
+              <Select value={currentTaxonomyId} onValueChange={(value) => {
+                if (value === "create-new") {
+                  setShowSaveDialog(true)
+                  setNewTaxonomyName("")
+                } else {
+                  loadTaxonomy(value)
+                }
+              }}>
+                <SelectTrigger className="w-48 h-8 text-sm">
+                  <SelectValue placeholder="Select taxonomy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="create-new">
+                    <div className="flex items-center gap-2">
+                      <Plus className="h-3 w-3 text-blue-600" />
+                      <span className="text-blue-600">Create new...</span>
+                    </div>
+                  </SelectItem>
+                  {savedTaxonomies.length > 0 && (
+                    <>
+                      <div className="h-px bg-gray-200 my-1" />
+                      {savedTaxonomies.map((taxonomy) => (
+                        <SelectItem key={taxonomy.id} value={taxonomy.id}>
+                          <div className="flex items-center gap-2">
+                            {taxonomy.isActive && <Check className="h-3 w-3 text-green-600" />}
+                            <span>{taxonomy.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              
+              {currentTaxonomyId && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    onClick={() => setActiveTaxonomy(currentTaxonomyId)}
+                    size="sm"
+                    variant="outline"
+                    disabled={savedTaxonomies.find(t => t.id === currentTaxonomyId)?.isActive}
+                    title="Set as active taxonomy for prototypes 4-6"
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => deleteTaxonomy(currentTaxonomyId)}
+                    size="sm"
+                    variant="outline"
+                    title="Delete taxonomy"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <div className="flex items-center gap-2">
             {/* Go to Menu */}
             <div className="flex items-center gap-2">
@@ -779,10 +1086,43 @@ export default function TaxonomyTestPage() {
             </Button>
           </div>
         </div>
+        
+        {/* Save Dialog */}
+        {showSaveDialog && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Input
+                value={newTaxonomyName}
+                onChange={(e) => setNewTaxonomyName(e.target.value)}
+                placeholder="Enter taxonomy name..."
+                className="flex-1 h-8"
+                onKeyPress={(e) => e.key === 'Enter' && newTaxonomyName.trim() && saveTaxonomyToCollection(newTaxonomyName)}
+              />
+              <Button
+                onClick={() => saveTaxonomyToCollection(newTaxonomyName)}
+                disabled={!newTaxonomyName.trim()}
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+              <Button
+                onClick={() => setShowSaveDialog(false)}
+                size="sm"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-blue-700 mt-1">
+              This will be saved as a new taxonomy and set as active for prototypes 4-6
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {editedData && (
+        {editedData ? (
           <div className="h-full flex flex-col">
             <div className="flex-shrink-0 p-3 bg-gray-50 border-b">
               <div className="flex items-center gap-2">
@@ -807,6 +1147,17 @@ export default function TaxonomyTestPage() {
               <div className="space-y-1">
                 {editedData.map(category => renderCategory(category, 0, editedData))}
               </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-600 mb-4">Loading taxonomy data...</p>
+              <Button onClick={resetToAPI} variant="outline" size="sm">
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Load API Taxonomy
+              </Button>
             </div>
           </div>
         )}
