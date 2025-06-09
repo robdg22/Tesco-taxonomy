@@ -601,35 +601,39 @@ export default function TaxonomyTestPage() {
 
   const setActiveTaxonomy = async (taxonomyId: string) => {
     try {
+      // First, ensure the taxonomy we're setting as active has its data loaded
+      const targetTaxonomy = savedTaxonomies.find(t => t.id === taxonomyId)
+      if (targetTaxonomy && (!targetTaxonomy.data || targetTaxonomy.data.length === 0)) {
+        console.log(`Loading data for taxonomy ${taxonomyId} before setting as active`)
+        await loadTaxonomyData(taxonomyId)
+      }
+      
       // Update all taxonomies to set new active status
       const updatedTaxonomies = savedTaxonomies.map(t => ({
         ...t,
         isActive: t.id === taxonomyId
       }))
       
-      // Save each updated taxonomy individually
-      for (const taxonomy of updatedTaxonomies) {
-        const taxonomyKey = `taxonomy_${taxonomy.id}`
-        localStorage.setItem(taxonomyKey, JSON.stringify(taxonomy))
-      }
-      
-      // Update index
+      // Update only the lightweight metadata index in localStorage
       const taxonomyIndex = updatedTaxonomies.map(t => ({
         id: t.id,
         name: t.name,
         createdAt: t.createdAt,
         isActive: t.isActive
+        // No data stored in localStorage
       }))
       localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
       setSavedTaxonomies(updatedTaxonomies)
       
-      // Save ONLY the active taxonomy to online API (respects blob limit)
+      // Save the active taxonomy to online API for backward compatibility with prototypes
       const activeTaxonomy = updatedTaxonomies.find(t => t.isActive)
-      if (activeTaxonomy) {
+      if (activeTaxonomy && activeTaxonomy.data && activeTaxonomy.data.length > 0) {
         await saveToOnlineAPI(activeTaxonomy.data)
+        console.log(`Set taxonomy ${taxonomyId} as active and saved to online API`)
+      } else {
+        console.log(`Set taxonomy ${taxonomyId} as active (no data to save to online API)`)
       }
       
-      console.log(`Set taxonomy ${taxonomyId} as active`)
     } catch (error) {
       console.error("Error setting active taxonomy:", error)
       alert("Failed to save active taxonomy setting.")
