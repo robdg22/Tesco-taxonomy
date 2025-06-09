@@ -167,4 +167,4 @@ export async function DELETE(request: NextRequest) {
     console.error('Error deleting taxonomy from blob:', error)
     return NextResponse.json({ error: 'Failed to delete taxonomy' }, { status: 500 })
   }
-} 
+}
