@@ -349,9 +349,9 @@ export default function TaxonomyTestPage() {
     const freedSpace = beforeSize - afterSize
     
     if (freedSpace > 0) {
-      alert(`Cleanup completed! Freed ${(freedSpace / 1024).toFixed(1)}KB of storage space.`)
+      alert(`Cleanup completed! Freed ${(freedSpace / 1024).toFixed(1)}KB of local storage space.`)
     } else {
-      alert("No orphaned data found to clean up.")
+      alert("No orphaned local data found to clean up.")
     }
   }
 
@@ -376,31 +376,33 @@ export default function TaxonomyTestPage() {
       // Remove any old storage format data
       localStorage.removeItem('savedTaxonomies')
       localStorage.removeItem('editedTaxonomy')
+      localStorage.removeItem('customTaxonomy')
       
-      // Clean up any orphaned taxonomy keys (not in index)
+      // Clean up any old individual taxonomy keys from localStorage
+      const keysToRemove = []
+      for (let key in localStorage) {
+        if (key.startsWith('taxonomy_')) {
+          keysToRemove.push(key)
+        }
+      }
+      
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key)
+        console.log(`Cleaned up old localStorage taxonomy: ${key}`)
+      })
+      
+      if (keysToRemove.length > 0) {
+        console.log(`Cleaned up ${keysToRemove.length} old localStorage taxonomies`)
+      }
+      
+      // Clean up any orphaned taxonomy keys (not in current index)
       const indexData = localStorage.getItem('taxonomyIndex')
       if (indexData) {
         const taxonomyIndex = JSON.parse(indexData)
         const validIds = new Set(taxonomyIndex.map((t: any) => t.id))
         
-        const keysToRemove = []
-        for (let key in localStorage) {
-          if (key.startsWith('taxonomy_')) {
-            const id = key.replace('taxonomy_', '')
-            if (!validIds.has(id)) {
-              keysToRemove.push(key)
-            }
-          }
-        }
-        
-        keysToRemove.forEach(key => {
-          localStorage.removeItem(key)
-          console.log(`Cleaned up orphaned taxonomy: ${key}`)
-        })
-        
-        if (keysToRemove.length > 0) {
-          console.log(`Cleaned up ${keysToRemove.length} orphaned taxonomies`)
-        }
+        // This is now just for cleanup - we don't store individual taxonomies in localStorage anymore
+        console.log(`Current taxonomy index has ${validIds.size} taxonomies (stored in blob)`)
       }
     } catch (error) {
       console.error("Error during cleanup:", error)
@@ -475,22 +477,23 @@ export default function TaxonomyTestPage() {
         isActive: makeActive ? false : t.isActive
       }))
       
-      // Add new taxonomy metadata to index
+      // Add new taxonomy metadata to index (NO full data in localStorage)
       const newTaxonomyMeta = {
         id: newTaxonomy.id,
         name: newTaxonomy.name,
         createdAt: newTaxonomy.createdAt,
         isActive: newTaxonomy.isActive,
-        data: cleanedData // Keep data in memory for immediate use
+        data: cleanedData // Keep in memory for immediate use, but not in localStorage
       }
       updatedTaxonomies.push(newTaxonomyMeta as SavedTaxonomy)
 
-      // Save only lightweight metadata index to localStorage
+      // Save only lightweight metadata index to localStorage (NO taxonomy data)
       const taxonomyIndex = updatedTaxonomies.map(t => ({
         id: t.id,
         name: t.name,
         createdAt: t.createdAt,
         isActive: t.isActive
+        // Explicitly NOT including data here
       }))
       localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
       setSavedTaxonomies(updatedTaxonomies as SavedTaxonomy[])
@@ -1030,39 +1033,38 @@ export default function TaxonomyTestPage() {
 
         const cleanedData = removeParentIds(editedData)
         
-        // Update the current taxonomy using individual storage
+        // Update the current taxonomy using blob storage
         const updatedTaxonomies = savedTaxonomies.map(t => 
           t.id === currentTaxonomyId 
             ? { ...t, data: cleanedData }
             : t
         )
         
-        // Save the updated taxonomy individually
+        // Save the updated taxonomy to blob storage
         const updatedTaxonomy = updatedTaxonomies.find(t => t.id === currentTaxonomyId)
         if (updatedTaxonomy) {
-          // Check storage quota before saving
-          const taxonomyDataSize = JSON.stringify(updatedTaxonomy).length
-          if (!checkStorageQuota(taxonomyDataSize)) {
-            alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
+          // Save to blob storage instead of localStorage
+          const blobSaveSuccess = await saveTaxonomyToBlob(updatedTaxonomy)
+          
+          if (!blobSaveSuccess) {
+            alert("Failed to save taxonomy to cloud storage. Please try again.")
             return
           }
-
-          const taxonomyKey = `taxonomy_${currentTaxonomyId}`
-          localStorage.setItem(taxonomyKey, JSON.stringify(updatedTaxonomy))
           
-          // Update the taxonomy index (lightweight metadata only)
+          // Update only the lightweight metadata index in localStorage
           const taxonomyIndex = updatedTaxonomies.map(t => ({
             id: t.id,
             name: t.name,
             createdAt: t.createdAt,
             isActive: t.isActive
+            // No data stored in localStorage
           }))
           localStorage.setItem('taxonomyIndex', JSON.stringify(taxonomyIndex))
         }
         
         setSavedTaxonomies(updatedTaxonomies)
         
-        // If this is the active taxonomy, also save to online API
+        // If this is the active taxonomy, also save to online API for backward compatibility
         const currentTaxonomy = updatedTaxonomies.find(t => t.id === currentTaxonomyId)
         if (currentTaxonomy?.isActive) {
           await saveToOnlineAPI(cleanedData)
@@ -1071,16 +1073,11 @@ export default function TaxonomyTestPage() {
         setHasChanges(false)
         setPendingReset(false)
         
-        console.log(`Successfully updated taxonomy: ${currentTaxonomy?.name} (${(JSON.stringify(cleanedData).length / 1024).toFixed(1)}KB). Total storage: ${getStorageSizeFormatted()}`)
+        console.log(`Successfully updated taxonomy: ${currentTaxonomy?.name} in blob storage`)
         
       } catch (error) {
         console.error("Error saving taxonomy:", error)
-        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-          alert(`Storage quota exceeded. Current usage: ${getStorageSizeFormatted()}. Please delete some taxonomies to free up space.`)
-          cleanupOldTaxonomies()
-        } else {
-          alert("Failed to save taxonomy. Please try again.")
-        }
+        alert("Failed to save taxonomy. Please try again.")
       } finally {
         setSaving(false)
       }
