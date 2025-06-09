@@ -274,6 +274,20 @@ export default function TaxonomyTestPage() {
 
   const canUndo = historyIndex >= 0
 
+  // Manual cleanup function for users
+  const manualCleanup = () => {
+    const beforeSize = getStorageSize()
+    cleanupOldTaxonomies()
+    const afterSize = getStorageSize()
+    const freedSpace = beforeSize - afterSize
+    
+    if (freedSpace > 0) {
+      alert(`Cleanup completed! Freed ${(freedSpace / 1024).toFixed(1)}KB of storage space.`)
+    } else {
+      alert("No orphaned data found to clean up.")
+    }
+  }
+
   // Storage management utilities
   const getStorageSize = () => {
     let total = 0
@@ -329,15 +343,27 @@ export default function TaxonomyTestPage() {
   const checkStorageQuota = (dataSize: number) => {
     const currentSize = getStorageSize()
     const estimatedNewSize = currentSize + dataSize
-    const quotaLimit = 5 * 1024 * 1024 // 5MB typical localStorage limit
+    const quotaLimit = 10 * 1024 * 1024 // 10MB - more realistic localStorage limit
     
-    console.log(`Storage check: Current ${(currentSize / 1024).toFixed(1)}KB, Adding ${(dataSize / 1024).toFixed(1)}KB, Estimated ${(estimatedNewSize / 1024).toFixed(1)}KB`)
+    console.log(`Storage check: Current ${(currentSize / 1024).toFixed(1)}KB, Adding ${(dataSize / 1024).toFixed(1)}KB, Estimated ${(estimatedNewSize / 1024).toFixed(1)}KB, Limit ${(quotaLimit / 1024 / 1024).toFixed(0)}MB`)
     
-    if (estimatedNewSize > quotaLimit * 0.9) { // 90% threshold
-      console.warn("Approaching storage quota limit")
+    // Only block if we're really close to the limit (98% threshold) - very lenient
+    if (estimatedNewSize > quotaLimit * 0.98) {
+      console.warn("Very close to storage quota limit")
       cleanupOldTaxonomies()
-      return false
+      
+      // Try again after cleanup
+      const newCurrentSize = getStorageSize()
+      const newEstimatedSize = newCurrentSize + dataSize
+      console.log(`After cleanup: Current ${(newCurrentSize / 1024).toFixed(1)}KB, Estimated ${(newEstimatedSize / 1024).toFixed(1)}KB`)
+      
+      if (newEstimatedSize > quotaLimit * 0.98) {
+        console.error("Still over quota after cleanup")
+        return false
+      }
     }
+    
+    console.log("Storage quota check passed")
     return true
   }
 
@@ -1178,8 +1204,19 @@ export default function TaxonomyTestPage() {
             <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
             
             {/* Storage Status */}
-            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-              Storage: {getStorageSizeFormatted()}
+            <div className="flex items-center gap-1">
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                Storage: {getStorageSizeFormatted()}
+              </div>
+              <Button
+                onClick={manualCleanup}
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-xs"
+                title="Clean up orphaned storage data"
+              >
+                Clean
+              </Button>
             </div>
             
             {/* Taxonomy Selection */}
