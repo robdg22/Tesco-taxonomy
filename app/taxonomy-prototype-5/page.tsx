@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { graphqlRequest } from "@/lib/graphql-client"
-import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco"
+import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco" // Removed FilterInput import
 import { SuperDepartmentGrid } from "@/components/taxonomy-prototype-2/super-department-grid"
 import { DepartmentTabs } from "@/components/taxonomy-prototype-2/department-tabs"
 import { DepartmentTabsContent } from "@/components/taxonomy-prototype-2/department-tabs-content"
@@ -12,14 +12,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { AisleProductListingWithTabs } from "@/components/taxonomy-prototype-2/aisle-product-listing-with-tabs"
 import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-tabs"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button" // Import Button for special offers
 
 type NavigationLevel =
   | "superDepartmentGrid"
   | "departmentTabs"
   | "aisleProductsWithTabs"
   | "shelfProducts"
-  | "offersProducts"
+  | "offersProducts" // Added offersProducts
 
 export default function TaxonomyPrototype5Page() {
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartmentGrid")
@@ -34,7 +34,7 @@ export default function TaxonomyPrototype5Page() {
   const [productData, setProductData] = useState<GetCategoryProductsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [usingCustomTaxonomy, setUsingCustomTaxonomy] = useState(false)
+  const [usingCustomTaxonomy, setUsingCustomTaxonomy] = useState(false) // Track if using custom taxonomy
 
   const TAXONOMY_QUERY = `
     query GetTaxonomy(
@@ -116,14 +116,14 @@ export default function TaxonomyPrototype5Page() {
       $page: Int
       $count: Int
       $sortBy: String
-      $offers: Boolean
+      $offers: Boolean # Only offers variable
     ) {
       category(
         page: $page
         count: $count
         sortBy: $sortBy
         categoryId: $categoryId
-        offers: $offers
+        offers: $offers # Used offers variable
       ) {
         pageInformation: info {
           totalCount: total
@@ -156,7 +156,7 @@ export default function TaxonomyPrototype5Page() {
             unitPrice
             unitOfMeasure
           }
-          promotions {
+          promotions { # Added promotions field
             promotionId: id
             promotionType
             startDate
@@ -193,6 +193,7 @@ export default function TaxonomyPrototype5Page() {
             dataToCache = result.data.taxonomy[0]?.children || []
           }
           setFetchedBranches((prev) => new Map(prev).set(cacheKey, dataToCache))
+          setUsingCustomTaxonomy(false)
           return dataToCache
         } else if (result.errors) {
           setError(result.errors[0].message)
@@ -210,153 +211,303 @@ export default function TaxonomyPrototype5Page() {
   )
 
   const fetchProducts = useCallback(
-    async (categoryId: string, offers: boolean = false): Promise<GetCategoryProductsResponse | null> => {
+    async (categoryId: string, offers = false) => {
+      // Only offers parameter, no filters array
       setLoading(true)
       setError(null)
       try {
-        const variables = {
+        const variables: {
+          categoryId: string
+          page: number
+          count: number
+          sortBy: string
+          offers?: boolean
+        } = {
           categoryId: categoryId,
-          page: 1,
-          count: 48,
-          sortBy: "RELEVANCE",
-          offers: offers,
+          page: 0,
+          count: 20,
+          sortBy: "relevance",
         }
-        const result = await graphqlRequest<{ category: GetCategoryProductsResponse }>(PRODUCT_QUERY, variables)
+
+        if (offers) {
+          variables.offers = true
+        }
+
+        const result = await graphqlRequest<GetCategoryProductsResponse>(PRODUCT_QUERY, variables)
+
         if (result.data?.category) {
-          return result.data.category
+          setProductData(result.data)
         } else if (result.errors) {
           setError(result.errors[0].message)
         } else {
-          setError("No product data returned.")
+          setError("No product data returned or unexpected response structure.")
         }
       } catch (err) {
         setError(`Failed to fetch products: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoading(false)
       }
-      return null
     },
     [PRODUCT_QUERY],
   )
 
-  // Load initial taxonomy (only custom taxonomy)
-  const loadInitialTaxonomy = async () => {
+  const handleResetToAPI = () => {
+    localStorage.removeItem('customTaxonomy')
+    setUsingCustomTaxonomy(false)
+    setSuperDepartmentsData(null)
+    setSelectedSuperDepartmentId(null)
+    setSelectedDepartmentId(null)
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
+    setCurrentLevel("superDepartmentGrid")
+    const loadAPITaxonomy = async () => {
+      const data = await fetchTaxonomyBranch(null, "rounded")
+      setSuperDepartmentsData(data)
+    }
+    loadAPITaxonomy()
+  }
+
+  const handleRefreshCustom = () => {
+    // Reload custom taxonomy from localStorage
     try {
-      const response = await fetch('/api/taxonomy')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const customData = await response.json()
-      
-      if (customData && Array.isArray(customData)) {
-        setSuperDepartmentsData(customData)
+      const customTaxonomyData = localStorage.getItem('customTaxonomy')
+      if (customTaxonomyData) {
+        const parsedData = JSON.parse(customTaxonomyData)
+        setSuperDepartmentsData(parsedData)
         setUsingCustomTaxonomy(true)
-        setLoading(false)
+        setSelectedSuperDepartmentId(null)
+        setSelectedDepartmentId(null)
+        setSelectedAisleIdForTabs(null)
+        setSelectedShelfId(null)
+        setSelectedShelfTabId("all")
+        setCurrentLevel("superDepartmentGrid")
+        console.log("Custom taxonomy refreshed from localStorage:", parsedData)
       } else {
-        setError('Custom taxonomy data is not in expected format')
-        setLoading(false)
+        // No custom taxonomy, load from API
+        handleResetToAPI()
       }
     } catch (error) {
-      console.error('Failed to load custom taxonomy:', error)
-      setError(`Failed to load custom taxonomy: ${error instanceof Error ? error.message : String(error)}`)
-      setLoading(false)
+      console.error("Error refreshing custom taxonomy:", error)
+      handleResetToAPI()
     }
   }
 
   useEffect(() => {
-    loadInitialTaxonomy()
+    // Check for custom taxonomy online first, then localStorage
+    const loadCustomTaxonomy = async () => {
+      try {
+        // Try online API first
+        const response = await fetch('/api/taxonomy')
+        const result = await response.json()
+        
+        if (response.ok && result.data?.taxonomy) {
+          setSuperDepartmentsData(result.data.taxonomy)
+          setUsingCustomTaxonomy(true)
+          setLoading(false)
+          console.log("Online custom taxonomy loaded:", result.data.taxonomy)
+          return
+        }
+      } catch (error) {
+        console.error("Error loading online taxonomy:", error)
+      }
+      
+      // Fallback to localStorage
+      try {
+        const customTaxonomyData = localStorage.getItem('customTaxonomy')
+        if (customTaxonomyData) {
+          const parsedData = JSON.parse(customTaxonomyData)
+          setSuperDepartmentsData(parsedData)
+          setUsingCustomTaxonomy(true)
+          setLoading(false)
+          console.log("localStorage custom taxonomy loaded:", parsedData)
+          return
+        }
+      } catch (error) {
+        console.error("Error loading custom taxonomy from localStorage:", error)
+      }
+      
+      // If no custom taxonomy, load from API
+      const data = await fetchTaxonomyBranch(null, "rounded")
+      setSuperDepartmentsData(data)
+    }
+    
+    loadCustomTaxonomy()
   }, [])
 
+  useEffect(() => {
+    if (selectedSuperDepartmentId && superDepartmentsData) {
+      const selectedSd = superDepartmentsData.find((sd) => sd.id === selectedSuperDepartmentId)
+      if (selectedSd) {
+        const style = selectedSd.name === "Clothing & Accessories" ? "rounded" : "thumbnail"
+        fetchTaxonomyBranch(selectedSuperDepartmentId, style).then((data) => {
+          if (data && data.length > 0) {
+            setSelectedDepartmentId(data[0].id)
+          } else {
+            setSelectedDepartmentId(null)
+          }
+        })
+      }
+    }
+  }, [selectedSuperDepartmentId, superDepartmentsData, fetchTaxonomyBranch])
+
+  const superDepartments = useMemo(() => superDepartmentsData || [], [superDepartmentsData])
+
+  const departmentsForSelectedSuperDepartment = useMemo(() => {
+    if (selectedSuperDepartmentId) {
+      const selectedSd = superDepartmentsData?.find((sd) => sd.id === selectedSuperDepartmentId)
+      if (selectedSd) {
+        const style = selectedSd.name === "Clothing & Accessories" ? "rounded" : "thumbnail"
+        const cacheKey = `${selectedSuperDepartmentId}_${style}`
+        return fetchedBranches.get(cacheKey) || []
+      }
+    }
+    return []
+  }, [selectedSuperDepartmentId, superDepartmentsData, fetchedBranches])
+
+  const currentAisleShelves = useMemo(() => {
+    if (selectedAisleIdForTabs) {
+      const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+        d.children?.some((a) => a.id === selectedAisleIdForTabs),
+      )
+      const selectedAisle = selectedDepartment?.children?.find((a) => a.id === selectedAisleIdForTabs)
+      return selectedAisle?.children || []
+    }
+    return []
+  }, [selectedAisleIdForTabs, departmentsForSelectedSuperDepartment])
+
   const getHeaderTitle = () => {
-    if (currentLevel === "superDepartmentGrid") {
-      return "Custom Taxonomy - Super Departments"
+    switch (currentLevel) {
+      case "superDepartmentGrid":
+        return "Shop all categories"
+      case "departmentTabs":
+        const sd = superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)
+        return sd ? sd.name : "Departments"
+      case "aisleProductsWithTabs":
+        const aisleForTabs = departmentsForSelectedSuperDepartment
+          .flatMap((d) => d.children || [])
+          .find((a) => a.id === selectedAisleIdForTabs)
+        return aisleForTabs ? aisleForTabs.name : "Aisle Products"
+      case "shelfProducts":
+        const shelf = departmentsForSelectedSuperDepartment
+          .flatMap((d) => d.children || [])
+          .flatMap((a) => a.children || [])
+          .find((s) => s.id === selectedShelfId)
+        return shelf ? shelf.name : "Shelf Products"
+      case "offersProducts": // New title for offers
+        let offerCategoryName = "Category"
+        if (selectedShelfId) {
+          offerCategoryName = currentAisleShelves.find((s) => s.id === selectedShelfId)?.name || "Shelf"
+        } else if (selectedAisleIdForTabs) {
+          offerCategoryName =
+            departmentsForSelectedSuperDepartment
+              .flatMap((d) => d.children || [])
+              .find((a) => a.id === selectedAisleIdForTabs)?.name || "Aisle"
+        } else if (selectedDepartmentId) {
+          offerCategoryName =
+            departmentsForSelectedSuperDepartment.find((d) => d.id === selectedDepartmentId)?.name || "Department"
+        } else if (selectedSuperDepartmentId) {
+          offerCategoryName =
+            superDepartments.find((sd) => sd.id === selectedSuperDepartmentId)?.name || "Super Department"
+        }
+        return `Special offers in ${offerCategoryName}`
+      default:
+        return "Tesco Taxonomy"
     }
-    if (currentLevel === "departmentTabs" && selectedSuperDepartmentId) {
-      const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
-      return superDept?.name || "Departments"
-    }
-    if (currentLevel === "aisleProductsWithTabs" && selectedDepartmentId) {
-      const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
-      const dept = superDept?.children?.find((item) => item.id === selectedDepartmentId)
-      return dept?.name || "Aisles"
-    }
-    if (currentLevel === "shelfProducts" && selectedShelfId) {
-      const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
-      const dept = superDept?.children?.find((item) => item.id === selectedDepartmentId)
-      const aisle = dept?.children?.find((item) => item.id === selectedAisleIdForTabs)
-      const shelf = aisle?.children?.find((item) => item.id === selectedShelfId)
-      return shelf?.name || "Products"
-    }
-    if (currentLevel === "offersProducts") {
-      return "Special Offers"
-    }
-    return "Custom Taxonomy"
   }
 
   const handleSuperDepartmentSelect = (id: string) => {
     setSelectedSuperDepartmentId(id)
-    setSelectedDepartmentId(null)
     setCurrentLevel("departmentTabs")
+    setProductData(null)
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
   }
 
   const handleDepartmentTabSelect = (id: string) => {
     setSelectedDepartmentId(id)
     setSelectedAisleIdForTabs(null)
-    setCurrentLevel("aisleProductsWithTabs")
+    setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
   }
 
   const handleAisleSelectForProducts = (aisleId: string) => {
     setSelectedAisleIdForTabs(aisleId)
     setSelectedShelfId(null)
-    setCurrentLevel("shelfProducts")
+    setSelectedShelfTabId("all")
+    setCurrentLevel("aisleProductsWithTabs")
+    fetchProducts(aisleId)
   }
 
   const handleShelfSelectForProducts = (shelfId: string) => {
     setSelectedShelfId(shelfId)
-    fetchProducts(shelfId)
+    setSelectedAisleIdForTabs(null)
+    setSelectedShelfTabId("all")
     setCurrentLevel("shelfProducts")
+    fetchProducts(shelfId)
   }
 
   const handleShelfTabClick = (id: string) => {
     setSelectedShelfTabId(id)
-    if (id !== "all") {
+    if (id === "all") {
+      fetchProducts(selectedAisleIdForTabs!)
+    } else {
       fetchProducts(id)
     }
   }
 
   const handleSpecialOffersClick = (categoryId: string, categoryName: string) => {
-    fetchProducts(categoryId, true)
     setCurrentLevel("offersProducts")
+    fetchProducts(categoryId, true) // Fetch products with offers: true
   }
 
   const handleBack = () => {
-    if (currentLevel === "offersProducts") {
-      setCurrentLevel("shelfProducts")
-      setProductData(null)
-    } else if (currentLevel === "shelfProducts") {
-      setCurrentLevel("aisleProductsWithTabs")
-      setSelectedShelfId(null)
-      setProductData(null)
-    } else if (currentLevel === "aisleProductsWithTabs") {
-      setCurrentLevel("departmentTabs")
-      setSelectedAisleIdForTabs(null)
-    } else if (currentLevel === "departmentTabs") {
+    if (currentLevel === "departmentTabs") {
       setCurrentLevel("superDepartmentGrid")
       setSelectedSuperDepartmentId(null)
       setSelectedDepartmentId(null)
+    } else if (
+      currentLevel === "aisleProductsWithTabs" ||
+      currentLevel === "shelfProducts" ||
+      currentLevel === "offersProducts"
+    ) {
+      // Added offersProducts
+      setCurrentLevel("departmentTabs")
+      setProductData(null)
+      setSelectedAisleIdForTabs(null)
+      setSelectedShelfId(null)
+      setSelectedShelfTabId("all")
     }
   }
 
   const renderSpecialOffersButton = () => {
-    if (currentLevel === "shelfProducts" && selectedShelfId) {
+    let categoryId: string | null = null
+    let categoryName: string | null = null
+
+    if (currentLevel === "departmentTabs" && selectedDepartmentId) {
+      categoryId = selectedDepartmentId
+      categoryName =
+        departmentsForSelectedSuperDepartment.find((d) => d.id === selectedDepartmentId)?.name || "this department"
+    } else if (currentLevel === "aisleProductsWithTabs" && selectedAisleIdForTabs) {
+      categoryId = selectedAisleIdForTabs
+      categoryName =
+        departmentsForSelectedSuperDepartment
+          .flatMap((d) => d.children || [])
+          .find((a) => a.id === selectedAisleIdForTabs)?.name || "this aisle"
+    } else if (currentLevel === "shelfProducts" && selectedShelfId) {
+      categoryId = selectedShelfId
+      categoryName = currentAisleShelves.find((s) => s.id === selectedShelfId)?.name || "this shelf"
+    }
+
+    if (categoryId && categoryName) {
       return (
-        <div className="mb-4">
+        <div className="p-4 pt-0">
           <Button
-            onClick={() => handleSpecialOffersClick(selectedShelfId, "Special Offers")}
-            variant="outline"
-            className="w-full"
+            onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
+            className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
           >
-            View Special Offers
+            Special offers in {categoryName}
           </Button>
         </div>
       )
@@ -367,12 +518,13 @@ export default function TaxonomyPrototype5Page() {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-64" />
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-8 w-3/4" />
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
           </div>
         </div>
       )
@@ -380,38 +532,37 @@ export default function TaxonomyPrototype5Page() {
 
     if (error) {
       return (
-        <Alert>
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div className="p-4">
+          <Alert variant="destructive">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
       )
     }
 
     switch (currentLevel) {
       case "superDepartmentGrid":
-        return (
-          <SuperDepartmentGrid
-            superDepartments={superDepartmentsData || []}
-            onSelect={handleSuperDepartmentSelect}
-          />
-        )
-
+        if (superDepartments.length === 0) {
+          return <div className="p-4 text-gray-500">No super departments found.</div>
+        }
+        return <SuperDepartmentGrid superDepartments={superDepartments} onSelect={handleSuperDepartmentSelect} />
       case "departmentTabs":
-        if (!selectedSuperDepartmentId) return null
-        const selectedSuperDepartment = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
+        if (departmentsForSelectedSuperDepartment.length === 0) {
+          return <div className="p-4 text-gray-500">No departments found for this category.</div>
+        }
         return (
           <DepartmentTabsContent
             selectedDepartmentId={selectedDepartmentId}
-            departments={selectedSuperDepartment?.children || []}
+            departments={departmentsForSelectedSuperDepartment}
             onSelectAisleForProducts={handleAisleSelectForProducts}
             onSelectShelfForProducts={handleShelfSelectForProducts}
           />
         )
-
       case "aisleProductsWithTabs":
       case "shelfProducts":
-      case "offersProducts":
+      case "offersProducts": // Handle offersProducts here
         if (!productData || productData.category.productItems.length === 0) {
           return (
             <div className="p-4 text-gray-500">
@@ -425,31 +576,10 @@ export default function TaxonomyPrototype5Page() {
             totalCount={productData.category.pageInformation.totalCount}
           />
         )
-
       default:
-        return null
+        return <div className="p-4 text-gray-500">Select a category to browse.</div>
     }
   }
-
-  // Get current aisle shelves for tabs
-  const currentAisleShelves = useMemo(() => {
-    if (selectedAisleIdForTabs && selectedSuperDepartmentId && selectedDepartmentId) {
-      const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
-      const dept = superDept?.children?.find((item) => item.id === selectedDepartmentId)
-      const aisle = dept?.children?.find((item) => item.id === selectedAisleIdForTabs)
-      return aisle?.children || []
-    }
-    return []
-  }, [selectedAisleIdForTabs, selectedSuperDepartmentId, selectedDepartmentId, superDepartmentsData])
-
-  // Get departments for selected super department
-  const departmentsForSelectedSuperDepartment = useMemo(() => {
-    if (selectedSuperDepartmentId) {
-      const superDept = superDepartmentsData?.find((item) => item.id === selectedSuperDepartmentId)
-      return superDept?.children || []
-    }
-    return []
-  }, [selectedSuperDepartmentId, superDepartmentsData])
 
   return (
     <div className="flex flex-col h-screen w-full">
@@ -471,7 +601,7 @@ export default function TaxonomyPrototype5Page() {
             onShelfTabClick={handleShelfTabClick}
           />
         )}
-        {renderSpecialOffersButton()}
+        {renderSpecialOffersButton()} {/* Render the special offers button */}
       </NavigationHeader>
       <div className="flex-grow overflow-y-auto">{renderContent()}</div>
     </div>
