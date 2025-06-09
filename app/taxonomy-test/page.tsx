@@ -1,12 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle2, ArrowRight, RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save } from "lucide-react"
-import Link from "next/link"
+import { RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save, Hash, Image, EyeOff, Eye } from "lucide-react"
 import { graphqlRequest } from "@/lib/graphql-client"
 import type { GetTaxonomyResponse, TaxonomyItem } from "@/types/tesco"
 
@@ -58,7 +57,7 @@ const TAXONOMY_QUERY = `
             style
             images {
               type
-              url
+                url
               region
               title
             }
@@ -86,12 +85,13 @@ const TAXONOMY_QUERY = `
 
 interface CategoryWithParent extends TaxonomyItem {
   parentId?: string
+  hidden?: boolean
 }
 
 export default function TaxonomyTestPage() {
   const [originalData, setOriginalData] = useState<TaxonomyItem[] | null>(null)
   const [editedData, setEditedData] = useState<CategoryWithParent[] | null>(null)
-  const [loadingOriginal, setLoadingOriginal] = useState(false)
+  const [loadingReset, setLoadingReset] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [editingParents, setEditingParents] = useState<Record<string, string>>({})
   const [editingRanks, setEditingRanks] = useState<Record<string, number>>({})
@@ -99,85 +99,36 @@ export default function TaxonomyTestPage() {
   const [editingImages, setEditingImages] = useState<Record<string, string>>({})
   const [newCategoryName, setNewCategoryName] = useState("")
   const [hasChanges, setHasChanges] = useState(false)
-  const [savingOnline, setSavingOnline] = useState(false)
-  const [loadingOnline, setLoadingOnline] = useState(false)
-  const [onlineStatus, setOnlineStatus] = useState<'none' | 'saved' | 'error'>('none')
+  const [saving, setSaving] = useState(false)
+  const [pendingReset, setPendingReset] = useState(false)
 
   useEffect(() => {
-    // Try to load from online API first, then fallback to localStorage
     loadFromOnline()
   }, [])
 
   const loadFromOnline = async () => {
-    setLoadingOnline(true)
     try {
-      console.log('Loading taxonomy from online API...')
-      
-      // Add timeout to prevent infinite loading
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
-      
-      const response = await fetch('/api/taxonomy', {
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
-      
-      console.log('API response status:', response.status)
+      const response = await fetch('/api/taxonomy')
       const result = await response.json()
-      console.log('API response:', result)
       
       if (response.ok && result.data?.taxonomy) {
         const withParentIds = addParentIds(result.data.taxonomy)
         setEditedData(withParentIds)
-        setOnlineStatus('saved')
-        console.log("Online taxonomy loaded successfully")
-      } else if (response.ok && result.data === null) {
-        console.log("No online taxonomy found")
-        setOnlineStatus('none')
-        // Try localStorage fallback
-        const customTaxonomyData = localStorage.getItem('customTaxonomy')
-        if (customTaxonomyData) {
-          const parsedData = JSON.parse(customTaxonomyData)
-          const withParentIds = addParentIds(parsedData)
-          setEditedData(withParentIds)
-          console.log("Loaded from localStorage fallback")
-        }
       } else {
-        console.error('API error:', result)
-        setOnlineStatus('error')
-        // Try localStorage fallback
         const customTaxonomyData = localStorage.getItem('customTaxonomy')
         if (customTaxonomyData) {
           const parsedData = JSON.parse(customTaxonomyData)
           const withParentIds = addParentIds(parsedData)
           setEditedData(withParentIds)
-          console.log("Loaded from localStorage after API error")
         }
       }
     } catch (error) {
-      console.error("Error loading online taxonomy:", error)
-      setOnlineStatus('error')
-      
-      // Check if it's a timeout error
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error("Request timed out after 10 seconds")
-        alert("Loading online taxonomy timed out. Using local data if available.")
+      const customTaxonomyData = localStorage.getItem('customTaxonomy')
+      if (customTaxonomyData) {
+        const parsedData = JSON.parse(customTaxonomyData)
+        const withParentIds = addParentIds(parsedData)
+        setEditedData(withParentIds)
       }
-      
-      // Try localStorage fallback
-      try {
-        const customTaxonomyData = localStorage.getItem('customTaxonomy')
-        if (customTaxonomyData) {
-          const parsedData = JSON.parse(customTaxonomyData)
-          const withParentIds = addParentIds(parsedData)
-          setEditedData(withParentIds)
-          console.log("Loaded from localStorage after error")
-        }
-      } catch (localError) {
-        console.error("Error loading from localStorage:", localError)
-      }
-    } finally {
-      setLoadingOnline(false)
     }
   }
 
@@ -189,8 +140,8 @@ export default function TaxonomyTestPage() {
     }))
   }
 
-  const loadOriginalTaxonomy = async () => {
-    setLoadingOriginal(true)
+  const resetToAPI = async () => {
+    setLoadingReset(true)
     try {
       const variables = {
         storeId: "3060",
@@ -200,15 +151,16 @@ export default function TaxonomyTestPage() {
       }
       const result = await graphqlRequest<GetTaxonomyResponse>(TAXONOMY_QUERY, variables)
       if (result.data?.taxonomy) {
-        setOriginalData(result.data.taxonomy)
         const withParentIds = addParentIds(result.data.taxonomy)
+        setOriginalData(result.data.taxonomy)
         setEditedData(withParentIds)
-        console.log("Original taxonomy loaded:", result.data.taxonomy)
+        setPendingReset(true)
+        setHasChanges(true)
       }
     } catch (error) {
-      console.error("Failed to load original taxonomy:", error)
+      console.error("Error loading API taxonomy:", error)
     } finally {
-      setLoadingOriginal(false)
+      setLoadingReset(false)
     }
   }
 
@@ -227,49 +179,38 @@ export default function TaxonomyTestPage() {
   }
 
   const updateParentId = (categoryId: string, newParentId: string) => {
-    setEditingParents(prev => ({
-      ...prev,
-      [categoryId]: newParentId
-    }))
+    setEditingParents(prev => ({ ...prev, [categoryId]: newParentId }))
+    setHasChanges(true)
   }
 
   const updateRank = (categoryId: string, newRank: number) => {
-    setEditingRanks(prev => ({
-      ...prev,
-      [categoryId]: newRank
-    }))
+    setEditingRanks(prev => ({ ...prev, [categoryId]: newRank }))
+    setHasChanges(true)
   }
 
   const updateName = (categoryId: string, newName: string) => {
-    setEditingNames(prev => ({
-      ...prev,
-      [categoryId]: newName
-    }))
+    setEditingNames(prev => ({ ...prev, [categoryId]: newName }))
+    setHasChanges(true)
   }
 
   const updateImageUrl = (categoryId: string, newImageUrl: string) => {
-    setEditingImages(prev => ({
-      ...prev,
-      [categoryId]: newImageUrl
-    }))
+    setEditingImages(prev => ({ ...prev, [categoryId]: newImageUrl }))
+    setHasChanges(true)
   }
 
   const getCurrentImageUrl = (category: CategoryWithParent): string => {
-    // Try to get the first image URL from the category's images
-    if (category.images && category.images.length > 0) {
-      const imageStyle = category.images[0]
-      if (imageStyle.images && imageStyle.images.length > 0) {
-        return imageStyle.images[0].url || ""
-      }
+    if (editingImages[category.id]) {
+      return editingImages[category.id]
     }
-    return ""
+    return category.images?.[0]?.images?.[0]?.url || ""
   }
 
   const generateCategoryId = (name: string): string => {
-    // Generate a simple ID based on name + timestamp
-    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '_')
-    const timestamp = Date.now().toString().slice(-6) // Last 6 digits of timestamp
-    return `${cleanName}_${timestamp}`
+    return name.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
   }
 
   const createNewRootCategory = () => {
@@ -281,16 +222,12 @@ export default function TaxonomyTestPage() {
       label: newCategoryName.trim(),
       pageType: "category",
       images: [],
-      children: [],
-      parentId: undefined
+      children: []
     }
 
-    // Insert at position 1 (beginning of array)
-    const newData = [newCategory, ...editedData]
-    setEditedData(newData)
-    setHasChanges(true)
+    setEditedData([newCategory, ...editedData])
     setNewCategoryName("")
-    console.log("Created new root category:", newCategory)
+    setHasChanges(true)
   }
 
   const handleNewCategoryKeyPress = (e: React.KeyboardEvent) => {
@@ -304,10 +241,10 @@ export default function TaxonomyTestPage() {
   }
 
   const applyParentChange = (categoryId: string) => {
-    const newParentId = editingParents[categoryId]
-    if (!newParentId || !editedData) return
+    if (!editedData || !editingParents[categoryId]) return
 
-    // Find and remove category from current location
+    const newParentId = editingParents[categoryId]
+    
     const findAndRemoveCategory = (categories: CategoryWithParent[]): CategoryWithParent | null => {
       for (let i = 0; i < categories.length; i++) {
         if (categories[i].id === categoryId) {
@@ -321,13 +258,16 @@ export default function TaxonomyTestPage() {
       return null
     }
 
-    // Find target parent and add category
     const findAndAddToParent = (categories: CategoryWithParent[], targetParentId: string, categoryToAdd: CategoryWithParent): boolean => {
+      if (targetParentId === "root") {
+        categories.push({ ...categoryToAdd, parentId: undefined })
+        return true
+      }
+      
       for (const category of categories) {
         if (category.id === targetParentId) {
           if (!category.children) category.children = []
-          categoryToAdd.parentId = targetParentId
-          ;(category.children as CategoryWithParent[]).push(categoryToAdd)
+          ;(category.children as CategoryWithParent[]).push({ ...categoryToAdd, parentId: targetParentId })
           return true
         }
         if (category.children) {
@@ -339,23 +279,12 @@ export default function TaxonomyTestPage() {
       return false
     }
 
-    const newData = JSON.parse(JSON.stringify(editedData)) // Deep clone
+    const newData = JSON.parse(JSON.stringify(editedData))
     const categoryToMove = findAndRemoveCategory(newData)
     
-    if (categoryToMove) {
-      if (newParentId === "root") {
-        // Move to root level
-        categoryToMove.parentId = undefined
-        newData.push(categoryToMove)
-      } else {
-        // Move to specific parent
-        findAndAddToParent(newData, newParentId, categoryToMove)
-      }
-      
+    if (categoryToMove && findAndAddToParent(newData, newParentId, categoryToMove)) {
       setEditedData(newData)
-      setHasChanges(true)
-      
-      // Clear the editing state
+      delete editingParents[categoryId]
       setEditingParents(prev => {
         const newState = { ...prev }
         delete newState[categoryId]
@@ -365,64 +294,55 @@ export default function TaxonomyTestPage() {
   }
 
   const applyRankChange = (categoryId: string) => {
-    const newRank = editingRanks[categoryId]
-    if (!newRank || !editedData) return
+    if (!editedData || editingRanks[categoryId] === undefined) return
 
-    // Find the category and its siblings
+    const newRank = editingRanks[categoryId]
+    
     const findCategoryAndSiblings = (categories: CategoryWithParent[], targetId: string): { category: CategoryWithParent, siblings: CategoryWithParent[], parentArray: CategoryWithParent[] } | null => {
-      // Check if it's in the current level
-      const index = categories.findIndex(cat => cat.id === targetId)
-      if (index !== -1) {
-        return { category: categories[index], siblings: categories, parentArray: categories }
-      }
-      
-      // Check children
-      for (const category of categories) {
-        if (category.children) {
-          const result = findCategoryAndSiblings(category.children as CategoryWithParent[], targetId)
+      for (let i = 0; i < categories.length; i++) {
+        if (categories[i].id === targetId) {
+          return { category: categories[i], siblings: categories, parentArray: categories }
+        }
+        if (categories[i].children) {
+          const result = findCategoryAndSiblings(categories[i].children as CategoryWithParent[], targetId)
           if (result) return result
         }
       }
       return null
     }
 
-    const newData = JSON.parse(JSON.stringify(editedData)) // Deep clone
+    const newData = JSON.parse(JSON.stringify(editedData))
     const result = findCategoryAndSiblings(newData, categoryId)
     
     if (result) {
       const { category, siblings } = result
       const currentIndex = siblings.findIndex(cat => cat.id === categoryId)
-      const newIndex = Math.max(0, Math.min(newRank - 1, siblings.length - 1))
+      const targetIndex = Math.max(0, Math.min(newRank - 1, siblings.length - 1))
       
-      if (currentIndex !== newIndex) {
-        // Remove from current position
+      if (currentIndex !== -1 && targetIndex !== currentIndex) {
         siblings.splice(currentIndex, 1)
-        // Insert at new position
-        siblings.splice(newIndex, 0, category)
-        
+        siblings.splice(targetIndex, 0, category)
         setEditedData(newData)
-        setHasChanges(true)
       }
-      
-      // Clear the editing state
-      setEditingRanks(prev => {
-        const newState = { ...prev }
-        delete newState[categoryId]
-        return newState
-      })
     }
+    
+    setEditingRanks(prev => {
+      const newState = { ...prev }
+      delete newState[categoryId]
+      return newState
+    })
   }
 
   const applyNameChange = (categoryId: string) => {
-    const newName = editingNames[categoryId]
-    if (!newName || !editedData) return
+    if (!editedData || !editingNames[categoryId]) return
 
-    // Find and update the category name
+    const newName = editingNames[categoryId]
+    
     const updateCategoryName = (categories: CategoryWithParent[]): boolean => {
       for (const category of categories) {
         if (category.id === categoryId) {
-          category.name = newName.trim()
-          category.label = newName.trim()
+          category.name = newName
+          category.label = newName
           return true
         }
         if (category.children) {
@@ -434,12 +354,9 @@ export default function TaxonomyTestPage() {
       return false
     }
 
-    const newData = JSON.parse(JSON.stringify(editedData)) // Deep clone
+    const newData = JSON.parse(JSON.stringify(editedData))
     if (updateCategoryName(newData)) {
       setEditedData(newData)
-      setHasChanges(true)
-      
-      // Clear the editing state
       setEditingNames(prev => {
         const newState = { ...prev }
         delete newState[categoryId]
@@ -449,27 +366,29 @@ export default function TaxonomyTestPage() {
   }
 
   const applyImageChange = (categoryId: string) => {
-    const newImageUrl = editingImages[categoryId]
-    if (newImageUrl === undefined || !editedData) return
+    if (!editedData || !editingImages[categoryId]) return
 
-    // Find and update the category image
+    const newImageUrl = editingImages[categoryId]
+    
     const updateCategoryImage = (categories: CategoryWithParent[]): boolean => {
       for (const category of categories) {
         if (category.id === categoryId) {
-          // Update or create image structure
-          if (newImageUrl.trim()) {
-            category.images = [{
+          if (!category.images) category.images = []
+          if (category.images.length === 0) {
+            category.images.push({
               style: "thumbnail",
-              images: [{
-                type: "default",
-                url: newImageUrl.trim(),
-                region: "",
-                title: category.name
-              }]
-            }]
+              images: []
+            })
+          }
+          if (category.images[0].images.length === 0) {
+            category.images[0].images.push({
+              type: "image",
+              url: newImageUrl,
+              region: "default",
+              title: category.name
+            })
           } else {
-            // Clear images if empty URL
-            category.images = []
+            category.images[0].images[0].url = newImageUrl
           }
           return true
         }
@@ -482,12 +401,9 @@ export default function TaxonomyTestPage() {
       return false
     }
 
-    const newData = JSON.parse(JSON.stringify(editedData)) // Deep clone
+    const newData = JSON.parse(JSON.stringify(editedData))
     if (updateCategoryImage(newData)) {
       setEditedData(newData)
-      setHasChanges(true)
-      
-      // Clear the editing state
       setEditingImages(prev => {
         const newState = { ...prev }
         delete newState[categoryId]
@@ -497,302 +413,235 @@ export default function TaxonomyTestPage() {
   }
 
   const saveChanges = async () => {
-    if (editedData) {
-      // Remove parentId before saving (it's just for editing)
-      const cleanData = JSON.parse(JSON.stringify(editedData))
-      const removeParentIds = (categories: any[]) => {
-        categories.forEach(category => {
-          delete category.parentId
-          if (category.children) {
-            removeParentIds(category.children)
-          }
-        })
-      }
-      removeParentIds(cleanData)
-      
-      // Save to localStorage as backup
-      localStorage.setItem('customTaxonomy', JSON.stringify(cleanData))
-      setHasChanges(false)
-      console.log("Custom taxonomy saved to localStorage:", cleanData)
-    }
-  }
-
-  const saveToOnline = async () => {
-    setSavingOnline(true)
+    if (!editedData) return
+    
+    setSaving(true)
     try {
-      console.log('Saving taxonomy to online API...')
-      
-      // Add timeout to prevent infinite loading
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for saves
+      const removeParentIds = (categories: any[]): any[] => {
+        return categories.map(category => ({
+          ...category,
+          parentId: undefined,
+          children: category.children ? removeParentIds(category.children) : []
+        }))
+      }
+
+      const cleanedData = removeParentIds(editedData)
       
       const response = await fetch('/api/taxonomy', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ taxonomy: editedData }),
-        signal: controller.signal
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taxonomy: cleanedData })
       })
-      clearTimeout(timeoutId)
-      
-      console.log('Save response status:', response.status)
-      const result = await response.json()
-      console.log('Save response:', result)
-      
-      if (response.ok && result.success) {
-        setOnlineStatus('saved')
+
+      if (response.ok) {
+        localStorage.setItem('customTaxonomy', JSON.stringify(cleanedData))
         setHasChanges(false)
-        console.log("Taxonomy saved online successfully")
-        alert(`Taxonomy saved online successfully! (${result.source})`)
-      } else {
-        console.error('Save API error:', result)
-        setOnlineStatus('error')
-        alert(`Failed to save online: ${result.error || 'Unknown error'}`)
-        
-        // Save to localStorage as fallback
-        localStorage.setItem('customTaxonomy', JSON.stringify(editedData))
-        console.log("Saved to localStorage as fallback")
+        setPendingReset(false)
       }
     } catch (error) {
-      console.error("Error saving online taxonomy:", error)
-      setOnlineStatus('error')
-      
-      // Check if it's a timeout error
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error("Save request timed out after 15 seconds")
-        alert("Save request timed out. Saved to local storage instead.")
-      } else {
-        alert(`Failed to save online: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-      
-      // Save to localStorage as fallback
-      try {
-        localStorage.setItem('customTaxonomy', JSON.stringify(editedData))
-        console.log("Saved to localStorage after error")
-      } catch (localError) {
-        console.error("Error saving to localStorage:", localError)
-        alert("Failed to save both online and locally!")
-      }
+      console.error("Error saving taxonomy:", error)
     } finally {
-      setSavingOnline(false)
+      setSaving(false)
     }
   }
 
-  const saveAndTest = async () => {
-    await saveToOnline()
-    // Open prototype in new tab
-    window.open('/taxonomy-prototype-4', '_blank')
-  }
+  const toggleCategoryVisibility = (categoryId: string) => {
+    if (!editedData) return
 
-  const resetToOriginal = () => {
-    if (originalData) {
-      const withParentIds = addParentIds(originalData)
-      setEditedData(withParentIds)
-      setHasChanges(false)
-      setEditingParents({})
-      setEditingRanks({})
-      setEditingNames({})
-      setEditingImages({})
-      setNewCategoryName("")
+    const toggleVisibility = (categories: CategoryWithParent[]): boolean => {
+      for (const category of categories) {
+        if (category.id === categoryId) {
+          category.hidden = !category.hidden
+          return true
+        }
+        if (category.children) {
+          if (toggleVisibility(category.children as CategoryWithParent[])) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+
+    const newData = JSON.parse(JSON.stringify(editedData))
+    if (toggleVisibility(newData)) {
+      setEditedData(newData)
+      setHasChanges(true)
     }
   }
 
   const renderCategory = (category: CategoryWithParent, level: number = 0, siblings: CategoryWithParent[] = []) => {
-    const isExpanded = expandedCategories.has(category.id)
     const hasChildren = category.children && category.children.length > 0
+    const isExpanded = expandedCategories.has(category.id)
+    const currentRank = getCurrentRank(category.id, siblings)
     const isEditingParent = editingParents[category.id] !== undefined
     const isEditingRank = editingRanks[category.id] !== undefined
     const isEditingName = editingNames[category.id] !== undefined
     const isEditingImage = editingImages[category.id] !== undefined
-    const currentRank = getCurrentRank(category.id, siblings)
     const currentImageUrl = getCurrentImageUrl(category)
 
     return (
-      <div key={category.id} className="border rounded-lg mb-2">
-        <div className="p-3 bg-gray-50">
-          <div className="flex items-center gap-2">
-            {hasChildren && (
+      <div key={category.id} className={`border border-gray-200 rounded-md mb-1 ${category.hidden ? 'opacity-50 bg-gray-50' : ''}`}>
+        <div className="p-2">
+          <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-1 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => toggleExpanded(category.id)}
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 flex-shrink-0"
+                disabled={!hasChildren}
               >
-                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                {hasChildren ? (
+                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
+                ) : null}
               </Button>
-            )}
-            {!hasChildren && <div className="w-6" />}
-            
-            {/* Category Image Preview */}
-            <div className="w-12 h-12 bg-gray-200 rounded border flex-shrink-0 overflow-hidden">
-              {currentImageUrl ? (
-                <img 
-                  src={currentImageUrl} 
-                  alt={category.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                  No Image
-                </div>
-              )}
-            </div>
-            
-            <div className="flex-1">
-              {/* Editable Category Name */}
-              {isEditingName ? (
-                <div className="flex items-center gap-1 mb-1">
-                  <Input
-                    value={editingNames[category.id]}
-                    onChange={(e) => updateName(category.id, e.target.value)}
-                    className="h-7 text-sm font-medium"
-                    onKeyPress={(e) => e.key === 'Enter' && applyNameChange(category.id)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyNameChange(category.id)}
-                    className="h-7 w-7 p-0"
-                  >
-                    <Save className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div 
-                  className="font-medium cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
-                  onClick={() => updateName(category.id, category.name)}
-                >
-                  {category.name}
-                </div>
-              )}
               
-              {/* Editable Image URL */}
-              {isEditingImage ? (
-                <div className="flex items-center gap-1 mb-1">
-                  <Input
-                    value={editingImages[category.id]}
-                    onChange={(e) => updateImageUrl(category.id, e.target.value)}
-                    placeholder="Image URL"
-                    className="h-6 text-xs"
-                    onKeyPress={(e) => e.key === 'Enter' && applyImageChange(category.id)}
+              {/* Image Thumbnail */}
+              <div 
+                className="w-8 h-8 bg-gray-200 rounded border flex-shrink-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-300"
+                onClick={() => updateImageUrl(category.id, currentImageUrl)}
+                title={currentImageUrl ? "Click to edit image URL" : "Click to add image URL"}
+              >
+                {currentImageUrl ? (
+                  <img 
+                    src={currentImageUrl} 
+                    alt={category.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
                   />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyImageChange(category.id)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Save className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div 
-                  className="text-xs text-gray-500 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
-                  onClick={() => updateImageUrl(category.id, currentImageUrl)}
-                >
-                  {currentImageUrl ? "Click to edit image URL" : "Click to add image URL"}
-                </div>
-              )}
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    <Image className="h-3 w-3" />
+                  </div>
+                )}
+              </div>
               
-              <div className="text-sm text-gray-600 flex items-center gap-2">
-                <span>ID: {category.id}</span>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {isEditingName ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={editingNames[category.id]}
+                      onChange={(e) => updateName(category.id, e.target.value)}
+                      className="h-6 text-sm font-medium"
+                      onKeyPress={(e) => e.key === 'Enter' && applyNameChange(category.id)}
+                      onBlur={() => applyNameChange(category.id)}
+                    />
+                  </div>
+                ) : (
+                  <span 
+                    className="font-medium truncate cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
+                    onClick={() => updateName(category.id, category.name)}
+                  >
+                    {category.name}
+                  </span>
+                )}
+                <code className="text-xs bg-gray-100 px-1 rounded font-mono">{category.id}</code>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => copyToClipboard(category.id)}
-                  className="h-4 w-4 p-0"
+                  className="h-5 w-5 p-0 flex-shrink-0"
                 >
                   <Copy className="h-3 w-3" />
                 </Button>
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Rank/Position Control */}
-              <div className="text-sm">
-                <span className="text-gray-500">Rank:</span>
-                {isEditingRank ? (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Input
-                      type="number"
-                      min="1"
-                      max={siblings.length}
-                      value={editingRanks[category.id]}
-                      onChange={(e) => updateRank(category.id, parseInt(e.target.value) || 1)}
-                      className="h-6 text-xs w-16"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => applyRankChange(category.id)}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Save className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-xs bg-gray-200 px-1 rounded">
-                      {currentRank}/{siblings.length}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => updateRank(category.id, currentRank)}
-                      className="h-4 w-4 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
 
-              {/* Parent Control */}
-              <div className="text-sm">
-                <span className="text-gray-500">Parent:</span>
-                {isEditingParent ? (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Input
-                      value={editingParents[category.id]}
-                      onChange={(e) => updateParentId(category.id, e.target.value)}
-                      placeholder="Parent ID or 'root'"
-                      className="h-6 text-xs w-32"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => applyParentChange(category.id)}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Save className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span className="font-mono text-xs bg-gray-200 px-1 rounded">
-                      {category.parentId || "root"}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => updateParentId(category.id, category.parentId || "root")}
-                      className="h-4 w-4 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {/* Rank Control */}
+              {isEditingRank ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min="1"
+                    max={siblings.length}
+                    value={editingRanks[category.id]}
+                    onChange={(e) => updateRank(category.id, parseInt(e.target.value) || 1)}
+                    className="h-6 w-12 text-xs"
+                    onKeyPress={(e) => e.key === 'Enter' && applyRankChange(category.id)}
+                    onBlur={() => applyRankChange(category.id)}
+                  />
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateRank(category.id, currentRank)}
+                  className="h-6 px-1 text-xs text-gray-500 hover:bg-gray-100"
+                >
+                  <Hash className="h-3 w-3 mr-1" />
+                  {currentRank}
+                </Button>
+              )}
+
+              {/* Hide/Show Control */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleCategoryVisibility(category.id)}
+                className="h-6 w-6 p-0 flex-shrink-0"
+                title={category.hidden ? "Show category" : "Hide category"}
+              >
+                {category.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              </Button>
+              
+              {/* Parent ID Control */}
+              {!isEditingParent && (
+                <Input
+                  placeholder="Parent ID"
+                  className="h-6 w-20 text-xs"
+                  onFocus={() => updateParentId(category.id, category.parentId || "root")}
+                />
+              )}
+              
+              {isEditingParent && (
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={editingParents[category.id]}
+                    onChange={(e) => updateParentId(category.id, e.target.value)}
+                    className="h-6 w-20 text-xs"
+                    onKeyPress={(e) => e.key === 'Enter' && applyParentChange(category.id)}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => applyParentChange(category.id)}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Image URL editing row */}
+          {isEditingImage && (
+            <div className="mt-2 flex items-center gap-2">
+              <Input
+                value={editingImages[category.id]}
+                onChange={(e) => updateImageUrl(category.id, e.target.value)}
+                placeholder="Image URL"
+                className="h-6 text-xs flex-1"
+                onKeyPress={(e) => e.key === 'Enter' && applyImageChange(category.id)}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => applyImageChange(category.id)}
+                className="h-6 w-6 p-0"
+              >
+                <Save className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
         
         {isExpanded && hasChildren && (
-          <div className="p-3 pt-0">
+          <div className="px-2 pb-2">
             {(category.children as CategoryWithParent[]).map(child => 
               renderCategory(child, level + 1, category.children as CategoryWithParent[])
             )}
@@ -803,122 +652,53 @@ export default function TaxonomyTestPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Taxonomy Editor</h1>
-        <p className="text-muted-foreground">
-          Reorganize the taxonomy by copying category IDs and pasting them as parent IDs
-        </p>
-      </div>
-
-      {/* Load Original Data */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Load Taxonomy Data</CardTitle>
-          <CardDescription>
-            Load the original Tesco taxonomy to start editing, or load your saved online taxonomy
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
+    <div className="h-screen flex flex-col">
+      <div className="flex-shrink-0 border-b bg-white p-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
+          <div className="flex items-center gap-2">
+            {pendingReset && (
+              <Alert className="py-1 px-2">
+                <AlertDescription className="text-xs">
+                  Reset to API taxonomy - click Save to apply
+                </AlertDescription>
+              </Alert>
+            )}
+            {hasChanges && (
+              <Button 
+                onClick={saveChanges} 
+                size="sm"
+                disabled={saving}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                Save
+              </Button>
+            )}
             <Button 
-              onClick={loadOriginalTaxonomy}
-              disabled={loadingOriginal}
-              className="flex items-center space-x-2"
-              variant="outline"
+              onClick={resetToAPI} 
+              variant="outline" 
+              size="sm"
+              disabled={loadingReset}
             >
-              {loadingOriginal ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              <span>{loadingOriginal ? "Loading..." : "Load API Taxonomy"}</span>
-            </Button>
-            
-            <Button 
-              onClick={loadFromOnline}
-              disabled={loadingOnline}
-              className="flex items-center space-x-2"
-            >
-              {loadingOnline ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              <span>{loadingOnline ? "Loading..." : "Load Online Taxonomy"}</span>
+              {loadingReset ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              Reset
             </Button>
           </div>
-          
-          {originalData && (
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-green-800">
-                ✅ API taxonomy loaded with {originalData.length} top-level categories
-              </p>
-            </div>
-          )}
-          
-          {onlineStatus === 'saved' && (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-800">
-                ☁️ Online taxonomy is available
-              </p>
-            </div>
-          )}
-          
-          {onlineStatus === 'error' && (
-            <div className="bg-red-50 p-4 rounded-lg">
-              <p className="text-sm text-red-800">
-                ❌ Error with online taxonomy - using localStorage backup
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Editor */}
-      {editedData && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Taxonomy Structure</span>
-              <div className="flex gap-2">
-                {hasChanges && (
-                  <>
-                    <Button onClick={saveChanges} variant="outline" size="sm">
-                      <Save className="h-4 w-4 mr-1" />
-                      Save Local
-                    </Button>
-                    <Button 
-                      onClick={saveToOnline} 
-                      size="sm"
-                      disabled={savingOnline}
-                    >
-                      {savingOnline ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                      Save Online
-                    </Button>
-                    <Button 
-                      onClick={saveAndTest} 
-                      size="sm"
-                      disabled={savingOnline}
-                    >
-                      {savingOnline ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                      Save Online & Test
-                    </Button>
-                  </>
-                )}
-                <Button onClick={resetToOriginal} variant="outline" size="sm">
-                  <RotateCcw className="h-4 w-4 mr-1" />
-                  Reset
-                </Button>
-              </div>
-            </CardTitle>
-            <CardDescription>
-              Click the chevron to expand categories. Copy category IDs and paste them as parent IDs to reorganize.
-              {onlineStatus === 'saved' && <span className="text-blue-600"> • Synced online ☁️</span>}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* New Category Creation */}
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+      <div className="flex-1 overflow-hidden">
+        {editedData && (
+          <div className="h-full flex flex-col">
+            <div className="flex-shrink-0 p-3 bg-gray-50 border-b">
               <div className="flex items-center gap-2">
                 <Input
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   onKeyPress={handleNewCategoryKeyPress}
-                  placeholder="Type category name and press Enter to create new root category"
-                  className="flex-1"
+                  placeholder="Create new category"
+                  className="flex-1 h-8"
                 />
                 <Button
                   onClick={createNewRootCategory}
@@ -928,52 +708,15 @@ export default function TaxonomyTestPage() {
                   Create
                 </Button>
               </div>
-              <p className="text-xs text-green-700 mt-1">
-                Creates a new category at rank 1 with auto-generated ID
-              </p>
             </div>
 
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {editedData.map(category => renderCategory(category, 0, editedData))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Test Link */}
-      {editedData && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-900">Test Your Changes</CardTitle>
-            <CardDescription className="text-blue-700">
-              {hasChanges ? "Save your changes and test them in the prototype" : "Test the current taxonomy in the prototype"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {hasChanges && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  ⚠️ You have unsaved changes. Click "Save and Test" above to save them before testing.
-                </p>
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="space-y-1">
+                {editedData.map(category => renderCategory(category, 0, editedData))}
               </div>
-            )}
-            <Link href="/taxonomy-prototype-4">
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center space-x-2">
-                <span>Test Reorganized Taxonomy</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Back to Home */}
-      <div className="pt-4">
-        <Link href="/">
-          <Button variant="outline">
-            ← Back to Home
-          </Button>
-        </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
