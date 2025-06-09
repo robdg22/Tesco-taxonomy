@@ -5,7 +5,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save, Hash, Image, EyeOff, Eye } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RotateCcw, Loader2, ChevronRight, ChevronDown, Copy, Save, Hash, Image, EyeOff, Eye, ExternalLink, Undo } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { graphqlRequest } from "@/lib/graphql-client"
 import type { GetTaxonomyResponse, TaxonomyItem } from "@/types/tesco"
 
@@ -89,6 +91,7 @@ interface CategoryWithParent extends TaxonomyItem {
 }
 
 export default function TaxonomyTestPage() {
+  const router = useRouter()
   const [originalData, setOriginalData] = useState<TaxonomyItem[] | null>(null)
   const [editedData, setEditedData] = useState<CategoryWithParent[] | null>(null)
   const [loadingReset, setLoadingReset] = useState(false)
@@ -101,6 +104,63 @@ export default function TaxonomyTestPage() {
   const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pendingReset, setPendingReset] = useState(false)
+  const [selectedPrototype, setSelectedPrototype] = useState<string>("")
+  const [history, setHistory] = useState<CategoryWithParent[][]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+
+  const prototypes = [
+    { value: "/taxonomy-prototype-1", label: "Prototype 1 - Basic Tesco API" },
+    { value: "/taxonomy-prototype-2", label: "Prototype 2 - SuperDept → Dept Tabs → Aisle Products" },
+    { value: "/taxonomy-prototype-3", label: "Prototype 3 - SuperDept → Dept Tabs → Aisle Grid" },
+    { value: "/taxonomy-prototype-4", label: "Prototype 4 - Custom Taxonomy (P1 Base)" },
+    { value: "/taxonomy-prototype-5", label: "Prototype 5 - Custom Taxonomy (P2 Base)" },
+    { value: "/taxonomy-prototype-6", label: "Prototype 6 - Custom Taxonomy (P3 Base)" }
+  ]
+
+  const handleGoToPrototype = () => {
+    if (selectedPrototype) {
+      router.push(selectedPrototype)
+    }
+  }
+
+  const saveToHistory = (data: CategoryWithParent[]) => {
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(JSON.parse(JSON.stringify(data)))
+    
+    // Keep only last 20 states to prevent memory issues
+    if (newHistory.length > 20) {
+      newHistory.shift()
+    } else {
+      setHistoryIndex(historyIndex + 1)
+    }
+    
+    setHistory(newHistory)
+  }
+
+  const updateEditedDataWithHistory = (newData: CategoryWithParent[]) => {
+    if (editedData) {
+      saveToHistory(editedData)
+    }
+    setEditedData(newData)
+    setHasChanges(true)
+  }
+
+  const handleUndo = () => {
+    if (historyIndex >= 0 && history[historyIndex]) {
+      const previousState = JSON.parse(JSON.stringify(history[historyIndex]))
+      setEditedData(previousState)
+      setHistoryIndex(historyIndex - 1)
+      setHasChanges(true)
+      
+      // Clear any active editing states
+      setEditingParents({})
+      setEditingRanks({})
+      setEditingNames({})
+      setEditingImages({})
+    }
+  }
+
+  const canUndo = historyIndex >= 0
 
   useEffect(() => {
     loadFromOnline()
@@ -225,9 +285,8 @@ export default function TaxonomyTestPage() {
       children: []
     }
 
-    setEditedData([newCategory, ...editedData])
+    updateEditedDataWithHistory([newCategory, ...editedData])
     setNewCategoryName("")
-    setHasChanges(true)
   }
 
   const handleNewCategoryKeyPress = (e: React.KeyboardEvent) => {
@@ -283,7 +342,7 @@ export default function TaxonomyTestPage() {
     const categoryToMove = findAndRemoveCategory(newData)
     
     if (categoryToMove && findAndAddToParent(newData, newParentId, categoryToMove)) {
-      setEditedData(newData)
+      updateEditedDataWithHistory(newData)
       delete editingParents[categoryId]
       setEditingParents(prev => {
         const newState = { ...prev }
@@ -322,7 +381,7 @@ export default function TaxonomyTestPage() {
       if (currentIndex !== -1 && targetIndex !== currentIndex) {
         siblings.splice(currentIndex, 1)
         siblings.splice(targetIndex, 0, category)
-        setEditedData(newData)
+        updateEditedDataWithHistory(newData)
       }
     }
     
@@ -356,7 +415,7 @@ export default function TaxonomyTestPage() {
 
     const newData = JSON.parse(JSON.stringify(editedData))
     if (updateCategoryName(newData)) {
-      setEditedData(newData)
+      updateEditedDataWithHistory(newData)
       setEditingNames(prev => {
         const newState = { ...prev }
         delete newState[categoryId]
@@ -403,7 +462,7 @@ export default function TaxonomyTestPage() {
 
     const newData = JSON.parse(JSON.stringify(editedData))
     if (updateCategoryImage(newData)) {
-      setEditedData(newData)
+      updateEditedDataWithHistory(newData)
       setEditingImages(prev => {
         const newState = { ...prev }
         delete newState[categoryId]
@@ -465,8 +524,7 @@ export default function TaxonomyTestPage() {
 
     const newData = JSON.parse(JSON.stringify(editedData))
     if (toggleVisibility(newData)) {
-      setEditedData(newData)
-      setHasChanges(true)
+      updateEditedDataWithHistory(newData)
     }
   }
 
@@ -592,7 +650,7 @@ export default function TaxonomyTestPage() {
               {!isEditingParent && (
                 <Input
                   placeholder="Parent ID"
-                  className="h-6 w-20 text-xs"
+                  className="h-6 w-24 text-xs"
                   onFocus={() => updateParentId(category.id, category.parentId || "root")}
                 />
               )}
@@ -602,7 +660,7 @@ export default function TaxonomyTestPage() {
                   <Input
                     value={editingParents[category.id]}
                     onChange={(e) => updateParentId(category.id, e.target.value)}
-                    className="h-6 w-20 text-xs"
+                    className="h-6 w-24 text-xs"
                     onKeyPress={(e) => e.key === 'Enter' && applyParentChange(category.id)}
                   />
                   <Button
@@ -657,6 +715,31 @@ export default function TaxonomyTestPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Taxonomy Editor</h1>
           <div className="flex items-center gap-2">
+            {/* Go to Menu */}
+            <div className="flex items-center gap-2">
+              <Select value={selectedPrototype} onValueChange={setSelectedPrototype}>
+                <SelectTrigger className="w-64 h-8 text-sm">
+                  <SelectValue placeholder="Go to prototype..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {prototypes.map((prototype) => (
+                    <SelectItem key={prototype.value} value={prototype.value}>
+                      {prototype.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                onClick={handleGoToPrototype}
+                disabled={!selectedPrototype}
+                size="sm"
+                variant="outline"
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Go
+              </Button>
+            </div>
+
             {pendingReset && (
               <Alert className="py-1 px-2">
                 <AlertDescription className="text-xs">
@@ -675,6 +758,16 @@ export default function TaxonomyTestPage() {
                 Save
               </Button>
             )}
+            <Button 
+              onClick={handleUndo}
+              variant="outline" 
+              size="sm"
+              disabled={!canUndo}
+              title={`Undo (${history.length} actions available)`}
+            >
+              <Undo className="h-4 w-4 mr-1" />
+              Undo
+            </Button>
             <Button 
               onClick={resetToAPI} 
               variant="outline" 
