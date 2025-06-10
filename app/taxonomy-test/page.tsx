@@ -445,15 +445,7 @@ export default function TaxonomyTestPage() {
       return
     }
 
-    const removeParentIds = (categories: any[]): any[] => {
-      return categories.map(category => ({
-        ...category,
-        parentId: undefined,
-        children: category.children ? removeParentIds(category.children) : []
-      }))
-    }
-
-    const cleanedData = removeParentIds(editedData)
+    const cleanedData = prepareDataForSaving(editedData)
     const newTaxonomy: SavedTaxonomy = {
       id: Date.now().toString(),
       name: name.trim(),
@@ -628,8 +620,10 @@ export default function TaxonomyTestPage() {
       // Save the active taxonomy to online API for backward compatibility with prototypes
       const activeTaxonomy = updatedTaxonomies.find(t => t.isActive)
       if (activeTaxonomy && activeTaxonomy.data && activeTaxonomy.data.length > 0) {
-        await saveToOnlineAPI(activeTaxonomy.data)
-        console.log(`Set taxonomy ${taxonomyId} as active and saved to online API`)
+        // Use prepareDataForSaving to exclude hidden categories for prototypes
+        const cleanedDataForPrototypes = prepareDataForSaving(addParentIds(activeTaxonomy.data))
+        await saveToOnlineAPI(cleanedDataForPrototypes)
+        console.log(`Set taxonomy ${taxonomyId} as active and saved to online API (hidden categories excluded)`)
       } else {
         console.log(`Set taxonomy ${taxonomyId} as active (no data to save to online API)`)
       }
@@ -814,6 +808,33 @@ export default function TaxonomyTestPage() {
     return category.images?.[0]?.images?.[0]?.url || ""
   }
 
+  // Function to filter out hidden categories recursively
+  const removeHiddenCategories = (categories: CategoryWithParent[]): CategoryWithParent[] => {
+    return categories
+      .filter(category => !category.hidden) // Remove hidden categories
+      .map(category => ({
+        ...category,
+        children: category.children ? removeHiddenCategories(category.children as CategoryWithParent[]) : []
+      }))
+  }
+
+  // Combined function to clean data for saving (remove parentIds and hidden categories)
+  const prepareDataForSaving = (categories: CategoryWithParent[]): any[] => {
+    // First remove hidden categories, then remove parentIds
+    const visibleCategories = removeHiddenCategories(categories)
+    
+    const removeParentIds = (cats: any[]): any[] => {
+      return cats.map(category => ({
+        ...category,
+        parentId: undefined,
+        hidden: undefined, // Also remove the hidden property
+        children: category.children ? removeParentIds(category.children) : []
+      }))
+    }
+    
+    return removeParentIds(visibleCategories)
+  }
+
   const generateCategoryId = (name: string): string => {
     const baseId = name.toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
@@ -912,9 +933,12 @@ export default function TaxonomyTestPage() {
 
     const stats = {
       totalCategories: 0,
+      hiddenCategories: 0,
+      visibleCategories: 0,
       duplicateIds: new Map<string, number>(),
       maxDepth: 0,
-      categoriesPerLevel: new Map<number, number>()
+      categoriesPerLevel: new Map<number, number>(),
+      hiddenPerLevel: new Map<number, number>()
     }
 
     const analyzeCategories = (categories: CategoryWithParent[], level: number = 0) => {
@@ -923,6 +947,14 @@ export default function TaxonomyTestPage() {
       
       categories.forEach(category => {
         stats.totalCategories++
+        
+        if (category.hidden) {
+          stats.hiddenCategories++
+          stats.hiddenPerLevel.set(level, (stats.hiddenPerLevel.get(level) || 0) + 1)
+        } else {
+          stats.visibleCategories++
+        }
+        
         const currentCount = stats.duplicateIds.get(category.id) || 0
         stats.duplicateIds.set(category.id, currentCount + 1)
         
@@ -936,7 +968,11 @@ export default function TaxonomyTestPage() {
 
     const duplicates = Array.from(stats.duplicateIds.entries()).filter(([_, count]) => count > 1)
     const levelBreakdown = Array.from(stats.categoriesPerLevel.entries())
-      .map(([level, count]) => `  Level ${level}: ${count} categories`)
+      .map(([level, count]) => {
+        const hidden = stats.hiddenPerLevel.get(level) || 0
+        const visible = count - hidden
+        return `  Level ${level}: ${count} total (${visible} visible, ${hidden} hidden)`
+      })
       .join('\n')
 
     const report = [
@@ -944,12 +980,18 @@ export default function TaxonomyTestPage() {
       ``,
       `📈 Overview:`,
       `• Total categories: ${stats.totalCategories}`,
+      `• Visible categories: ${stats.visibleCategories}`,
+      `• Hidden categories: ${stats.hiddenCategories}`,
       `• Maximum depth: ${stats.maxDepth} levels`,
       `• Duplicate IDs: ${duplicates.length}`,
       ``,
       `📋 Categories per level:`,
       levelBreakdown,
       ``,
+      ...(stats.hiddenCategories > 0 ? [
+        `👁️ Hidden categories will be excluded from prototypes when saved.`,
+        ``
+      ] : []),
       ...(duplicates.length > 0 ? [
         `⚠️ Duplicate IDs found:`,
         ...duplicates.slice(0, 5).map(([id, count]) => `• "${id}" appears ${count} times`),
@@ -1169,15 +1211,7 @@ export default function TaxonomyTestPage() {
       // Update existing taxonomy
       setSaving(true)
       try {
-        const removeParentIds = (categories: any[]): any[] => {
-          return categories.map(category => ({
-            ...category,
-            parentId: undefined,
-            children: category.children ? removeParentIds(category.children) : []
-          }))
-        }
-
-        const cleanedData = removeParentIds(editedData)
+        const cleanedData = prepareDataForSaving(editedData)
         
         // Update the current taxonomy using blob storage
         const updatedTaxonomies = savedTaxonomies.map(t => 
