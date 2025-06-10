@@ -339,17 +339,23 @@ export default function TaxonomyPrototype5Page() {
     if (selectedSuperDepartmentId && superDepartmentsData) {
       const selectedSd = superDepartmentsData.find((sd) => sd.id === selectedSuperDepartmentId)
       if (selectedSd) {
-        const style = selectedSd.name === "Clothing & Accessories" ? "rounded" : "thumbnail"
-        fetchTaxonomyBranch(selectedSuperDepartmentId, style).then((data) => {
-          if (data && data.length > 0) {
-            setSelectedDepartmentId(data[0].id)
-          } else {
-            setSelectedDepartmentId(null)
-          }
-        })
+        // If using custom taxonomy, children are already embedded
+        if (usingCustomTaxonomy && selectedSd.children && selectedSd.children.length > 0) {
+          setSelectedDepartmentId(selectedSd.children[0].id)
+        } else {
+          // Otherwise, fetch from API
+          const style = selectedSd.name === "Clothing & Accessories" ? "rounded" : "thumbnail"
+          fetchTaxonomyBranch(selectedSuperDepartmentId, style).then((data) => {
+            if (data && data.length > 0) {
+              setSelectedDepartmentId(data[0].id)
+            } else {
+              setSelectedDepartmentId(null)
+            }
+          })
+        }
       }
     }
-  }, [selectedSuperDepartmentId, superDepartmentsData, fetchTaxonomyBranch])
+  }, [selectedSuperDepartmentId, superDepartmentsData, fetchTaxonomyBranch, usingCustomTaxonomy])
 
   const superDepartments = useMemo(() => superDepartmentsData || [], [superDepartmentsData])
 
@@ -357,13 +363,19 @@ export default function TaxonomyPrototype5Page() {
     if (selectedSuperDepartmentId) {
       const selectedSd = superDepartmentsData?.find((sd) => sd.id === selectedSuperDepartmentId)
       if (selectedSd) {
+        // If using custom taxonomy, children are already embedded in the structure
+        if (usingCustomTaxonomy && selectedSd.children) {
+          return selectedSd.children
+        }
+        
+        // Otherwise, use the cached data from API calls
         const style = selectedSd.name === "Clothing & Accessories" ? "rounded" : "thumbnail"
         const cacheKey = `${selectedSuperDepartmentId}_${style}`
         return fetchedBranches.get(cacheKey) || []
       }
     }
     return []
-  }, [selectedSuperDepartmentId, superDepartmentsData, fetchedBranches])
+  }, [selectedSuperDepartmentId, superDepartmentsData, fetchedBranches, usingCustomTaxonomy])
 
   const currentAisleShelves = useMemo(() => {
     if (selectedAisleIdForTabs) {

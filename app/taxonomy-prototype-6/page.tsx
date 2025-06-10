@@ -327,12 +327,20 @@ export default function TaxonomyPrototype6Page() {
 
   const departments = useMemo(() => {
     if (selectedSuperDepartmentId) {
-      // Retrieve departments from cache, which were fetched with 'thumbnail' style
-      const cacheKey = `${selectedSuperDepartmentId}_thumbnail`
-      return fetchedBranches.get(cacheKey) || []
+      const selectedSd = superDepartmentsData?.find((sd) => sd.id === selectedSuperDepartmentId)
+      if (selectedSd) {
+        // If using custom taxonomy, children are already embedded in the structure
+        if (usingCustomTaxonomy && selectedSd.children) {
+          return selectedSd.children
+        }
+        
+        // Otherwise, retrieve departments from cache, which were fetched with 'thumbnail' style
+        const cacheKey = `${selectedSuperDepartmentId}_thumbnail`
+        return fetchedBranches.get(cacheKey) || []
+      }
     }
     return []
-  }, [selectedSuperDepartmentId, fetchedBranches])
+  }, [selectedSuperDepartmentId, superDepartmentsData, fetchedBranches, usingCustomTaxonomy])
 
   const aisles = useMemo(() => {
     if (selectedDepartmentId) {
@@ -356,12 +364,22 @@ export default function TaxonomyPrototype6Page() {
     setSelectedAisleId(null)
     setSelectedShelfId(null)
 
-    // Fetch children (departments, aisles, shelves) with 'thumbnail' style
-    const childrenData = await fetchTaxonomyBranch(id, "thumbnail")
-    if (childrenData && childrenData.length > 0) {
-      setSelectedDepartmentId(childrenData[0].id) // Select first department by default
+    if (usingCustomTaxonomy && superDepartmentsData) {
+      // If using custom taxonomy, children are already embedded
+      const selectedSd = superDepartmentsData.find((sd) => sd.id === id)
+      if (selectedSd && selectedSd.children && selectedSd.children.length > 0) {
+        setSelectedDepartmentId(selectedSd.children[0].id) // Select first department by default
+      } else {
+        setSelectedDepartmentId(null)
+      }
     } else {
-      setSelectedDepartmentId(null)
+      // Otherwise, fetch children (departments, aisles, shelves) with 'thumbnail' style
+      const childrenData = await fetchTaxonomyBranch(id, "thumbnail")
+      if (childrenData && childrenData.length > 0) {
+        setSelectedDepartmentId(childrenData[0].id) // Select first department by default
+      } else {
+        setSelectedDepartmentId(null)
+      }
     }
   }
 
