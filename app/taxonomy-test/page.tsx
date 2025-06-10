@@ -122,6 +122,10 @@ export default function TaxonomyTestPage() {
   const [newTaxonomyName, setNewTaxonomyName] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
 
+  // Image upload state
+  const [uploadingImages, setUploadingImages] = useState<Set<string>>(new Set())
+  const [imageUploadErrors, setImageUploadErrors] = useState<Record<string, string>>({})
+
   // Pin code protection
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [pinInput, setPinInput] = useState("")
@@ -801,6 +805,65 @@ export default function TaxonomyTestPage() {
     setHasChanges(true)
   }
 
+  const uploadImage = async (categoryId: string, file: File) => {
+    // Clear any previous errors
+    setImageUploadErrors(prev => {
+      const newErrors = { ...prev }
+      delete newErrors[categoryId]
+      return newErrors
+    })
+
+    // Add to uploading set
+    setUploadingImages(prev => new Set(prev).add(categoryId))
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed')
+      }
+
+      // Update the category image with the uploaded URL
+      updateImageUrl(categoryId, result.url)
+      
+      console.log(`Successfully uploaded image for category ${categoryId}:`, result.url)
+      
+      // Show success message
+      const fileSize = (file.size / 1024).toFixed(1)
+      alert(`✅ Image uploaded successfully!\nFile: ${file.name} (${fileSize}KB)\nURL: ${result.url}`)
+
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+      setImageUploadErrors(prev => ({ ...prev, [categoryId]: errorMessage }))
+      alert(`❌ Image upload failed: ${errorMessage}`)
+    } finally {
+      // Remove from uploading set
+      setUploadingImages(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(categoryId)
+        return newSet
+      })
+    }
+  }
+
+  const handleImageFileSelect = (categoryId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      uploadImage(categoryId, file)
+    }
+    // Clear the input so the same file can be selected again
+    event.target.value = ''
+  }
+
   const getCurrentImageUrl = (category: CategoryWithParent): string => {
     if (editingImages[category.id]) {
       return editingImages[category.id]
@@ -1320,10 +1383,23 @@ export default function TaxonomyTestPage() {
               
               {/* Image Thumbnail */}
               <div 
-                className="w-8 h-8 bg-gray-200 rounded border flex-shrink-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-300"
+                className={`w-8 h-8 bg-gray-200 rounded border flex-shrink-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-300 relative ${
+                  uploadingImages.has(category.id) ? 'opacity-75' : ''
+                }`}
                 onClick={() => updateImageUrl(category.id, currentImageUrl)}
-                title={currentImageUrl ? "Click to edit image URL" : "Click to add image URL"}
+                title={
+                  uploadingImages.has(category.id) 
+                    ? "Uploading image..." 
+                    : currentImageUrl 
+                      ? "Click to edit image URL" 
+                      : "Click to add image URL"
+                }
               >
+                {uploadingImages.has(category.id) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                  </div>
+                )}
                 {currentImageUrl ? (
                   <img 
                     src={currentImageUrl} 
@@ -1454,22 +1530,67 @@ export default function TaxonomyTestPage() {
 
           {/* Image URL editing row */}
           {isEditingImage && (
-            <div className="mt-2 flex items-center gap-2">
-              <Input
-                value={editingImages[category.id]}
-                onChange={(e) => updateImageUrl(category.id, e.target.value)}
-                placeholder="Image URL"
-                className="h-6 text-xs flex-1"
-                onKeyPress={(e) => e.key === 'Enter' && applyImageChange(category.id)}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => applyImageChange(category.id)}
-                className="h-6 w-6 p-0"
-              >
-                <Save className="h-3 w-3" />
-              </Button>
+            <div className="mt-2 space-y-2">
+              {/* URL Input Row */}
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editingImages[category.id]}
+                  onChange={(e) => updateImageUrl(category.id, e.target.value)}
+                  placeholder="Image URL"
+                  className="h-6 text-xs flex-1"
+                  onKeyPress={(e) => e.key === 'Enter' && applyImageChange(category.id)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => applyImageChange(category.id)}
+                  className="h-6 w-6 p-0"
+                  title="Save URL"
+                >
+                  <Save className="h-3 w-3" />
+                </Button>
+              </div>
+              
+              {/* File Upload Row */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageFileSelect(category.id, e)}
+                  className="hidden"
+                  id={`file-input-${category.id}`}
+                  disabled={uploadingImages.has(category.id)}
+                />
+                <label
+                  htmlFor={`file-input-${category.id}`}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs border rounded cursor-pointer hover:bg-gray-50 ${
+                    uploadingImages.has(category.id) 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'border-blue-300 text-blue-600 hover:border-blue-400'
+                  }`}
+                >
+                  {uploadingImages.has(category.id) ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      📁 Upload Image
+                    </>
+                  )}
+                </label>
+                <span className="text-xs text-gray-500">
+                  Max 5MB • JPEG, PNG, GIF, WebP
+                </span>
+              </div>
+              
+              {/* Error Display */}
+              {imageUploadErrors[category.id] && (
+                <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+                  ❌ {imageUploadErrors[category.id]}
+                </div>
+              )}
             </div>
           )}
         </div>
