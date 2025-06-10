@@ -38,7 +38,6 @@ export default function TaxonomyPrototype1Page() {
   const [productData, setProductData] = useState<GetCategoryProductsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showAisleProductsDirectly, setShowAisleProductsDirectly] = useState(false) // New state for toggle
   const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all") // New state for selected tab
 
   const TAXONOMY_QUERY = `
@@ -311,8 +310,8 @@ export default function TaxonomyPrototype1Page() {
     const selectedAisle = aisles.find((a) => a.id === id)
     const shelvesForAisle = selectedAisle?.children || []
 
-    // Modify the conditional logic for navigation
-    if (showAisleProductsDirectly || shelvesForAisle.length === 1) {
+    // If aisle has only 1 shelf or no shelves, go directly to products
+    if (shelvesForAisle.length <= 1) {
       setCurrentLevel("aisleProducts") // New level for aisle-level products
       fetchProducts(id) // Fetch products for the aisle
       console.log("Selected Aisle, fetching products for aisle:", id)
@@ -445,8 +444,6 @@ export default function TaxonomyPrototype1Page() {
           <AisleGrid
             aisles={aisles}
             onSelect={handleAisleSelect}
-            showAisleProductsDirectly={showAisleProductsDirectly}
-            onToggleChange={setShowAisleProductsDirectly}
           />
         )
       case "aisle":
