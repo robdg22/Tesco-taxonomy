@@ -384,6 +384,7 @@ export default function TaxonomyPrototype4Page() {
 
   const handleShelfSelect = (id: string) => {
     setSelectedShelfId(id)
+    setSelectedShelfTabId(id) // Set to the actual shelf ID, not "all"
     setCurrentLevel("products")
     fetchProducts(id)
     console.log("Selected Shelf, fetching products for:", id)
@@ -575,10 +576,34 @@ export default function TaxonomyPrototype4Page() {
 
   const currentAisleShelves = useMemo(() => {
     if (selectedAisleId) {
-      return aisles.find((a) => a.id === selectedAisleId)?.children || []
+      // Find the selected aisle and get its children (shelves)
+      let selectedAisle = null
+      
+      if (usingCustomTaxonomy) {
+        // For custom taxonomy, check if departments have embedded children
+        const selectedDepartment = departments.find((d) =>
+          (d.children && d.children.some((a) => a.id === selectedAisleId)) ||
+          (d.id === selectedAisleId) // In case the "aisle" is actually a department
+        )
+        
+        if (selectedDepartment) {
+          if (selectedDepartment.id === selectedAisleId) {
+            // The selected "aisle" is actually a department, return its children
+            selectedAisle = selectedDepartment
+          } else {
+            // Find the actual aisle within the department
+            selectedAisle = selectedDepartment.children?.find((a) => a.id === selectedAisleId)
+          }
+        }
+      } else {
+        // For API taxonomy, use the standard hierarchy
+        selectedAisle = aisles.find((a) => a.id === selectedAisleId)
+      }
+      
+      return selectedAisle?.children || []
     }
     return []
-  }, [selectedAisleId, aisles])
+  }, [selectedAisleId, aisles, departments, usingCustomTaxonomy])
 
   const renderShelfTabs = () => {
     if (currentLevel !== "aisleProducts") return null

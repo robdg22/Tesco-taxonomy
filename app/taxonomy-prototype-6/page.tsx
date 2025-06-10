@@ -358,6 +358,38 @@ export default function TaxonomyPrototype6Page() {
     return []
   }, [selectedAisleId, aisles])
 
+  // Calculate current aisle shelves for tabs (works with both API and custom taxonomy)
+  const currentAisleShelves = useMemo(() => {
+    if (selectedAisleId) {
+      // Find the selected aisle and get its children (shelves)
+      let selectedAisle = null
+      
+      if (usingCustomTaxonomy) {
+        // For custom taxonomy, check if departments have embedded children
+        const selectedDepartment = departments.find((d) =>
+          (d.children && d.children.some((a) => a.id === selectedAisleId)) ||
+          (d.id === selectedAisleId) // In case the "aisle" is actually a department
+        )
+        
+        if (selectedDepartment) {
+          if (selectedDepartment.id === selectedAisleId) {
+            // The selected "aisle" is actually a department, return its children
+            selectedAisle = selectedDepartment
+          } else {
+            // Find the actual aisle within the department
+            selectedAisle = selectedDepartment.children?.find((a) => a.id === selectedAisleId)
+          }
+        }
+      } else {
+        // For API taxonomy, use the standard hierarchy
+        selectedAisle = aisles.find((a) => a.id === selectedAisleId)
+      }
+      
+      return selectedAisle?.children || []
+    }
+    return []
+  }, [selectedAisleId, aisles, departments, usingCustomTaxonomy])
+
   // Handlers for navigation
   const handleSuperDepartmentSelect = async (id: string) => {
     setSelectedSuperDepartmentId(id)
@@ -399,21 +431,22 @@ export default function TaxonomyPrototype6Page() {
     const shelvesForAisle = selectedAisle?.children || []
 
     // Modify the conditional logic for navigation
-    if (shelvesForAisle.length === 1) {
+    if (shelvesForAisle.length <= 1) {
       setCurrentLevel("productListing") // Go straight to product listing
+      setSelectedShelfTabId("all") // Show "all" since we're showing aisle products
       fetchProducts(id) // Fetch products for the AISLE ID
     } else {
       setCurrentLevel("shelfGrid") // Go to shelf grid as usual
+      setSelectedShelfTabId("all") // Reset to "all" for shelf grid
     }
     setSelectedAisleId(id)
     setSelectedShelfId(null)
-    setSelectedShelfTabId("all")
     setProductData(null)
   }
 
   const handleShelfSelect = (id: string) => {
     setSelectedShelfId(id)
-    setSelectedShelfTabId("all")
+    setSelectedShelfTabId(id)
     setCurrentLevel("productListing")
     fetchProducts(id) // Fetch products for the selected shelf
   }
@@ -442,10 +475,11 @@ export default function TaxonomyPrototype6Page() {
       // If we came from a shelf, go back to shelfGrid. If from aisle (single shelf), go back to departmentTabs.
       if (selectedShelfId) {
         setCurrentLevel("shelfGrid")
+        setSelectedShelfTabId("all") // Reset to "all" when going back to shelf grid
       } else if (selectedAisleId) {
         setCurrentLevel("departmentTabs")
+        setSelectedShelfTabId("all") // Reset to "all" when going back to department tabs
       }
-      setSelectedShelfTabId("all")
       setProductData(null)
     } else if (currentLevel === "shelfGrid") {
       setCurrentLevel("departmentTabs")
@@ -603,9 +637,9 @@ export default function TaxonomyPrototype6Page() {
             selectedDepartmentId={selectedDepartmentId}
           />
         )}
-        {currentLevel === "productListing" && selectedAisleId && shelves.length > 1 && (
+        {currentLevel === "productListing" && selectedAisleId && currentAisleShelves.length > 1 && (
           <AisleShelfTabs
-            shelves={shelves}
+            shelves={currentAisleShelves}
             selectedShelfTabId={selectedShelfTabId}
             onShelfTabClick={handleShelfTabClick}
           />

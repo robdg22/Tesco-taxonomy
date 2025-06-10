@@ -379,23 +379,65 @@ export default function TaxonomyPrototype5Page() {
 
   const currentAisleShelves = useMemo(() => {
     if (selectedAisleIdForTabs) {
-      const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
-        d.children?.some((a) => a.id === selectedAisleIdForTabs),
-      )
-      const selectedAisle = selectedDepartment?.children?.find((a) => a.id === selectedAisleIdForTabs)
+      // Find the selected aisle and get its children (shelves)
+      let selectedAisle = null
+      
+      if (usingCustomTaxonomy) {
+        // For custom taxonomy, check if departments have embedded children
+        const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+          (d.children && d.children.some((a) => a.id === selectedAisleIdForTabs)) ||
+          (d.id === selectedAisleIdForTabs) // In case the "aisle" is actually a department
+        )
+        
+        if (selectedDepartment) {
+          if (selectedDepartment.id === selectedAisleIdForTabs) {
+            // The selected "aisle" is actually a department, return its children
+            selectedAisle = selectedDepartment
+          } else {
+            // Find the actual aisle within the department
+            selectedAisle = selectedDepartment.children?.find((a) => a.id === selectedAisleIdForTabs)
+          }
+        }
+      } else {
+        // For API taxonomy, use the standard hierarchy
+        const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+          d.children?.some((a) => a.id === selectedAisleIdForTabs)
+        )
+        selectedAisle = selectedDepartment?.children?.find((a) => a.id === selectedAisleIdForTabs)
+      }
+      
       return selectedAisle?.children || []
     } else if (selectedShelfId) {
       // For shelfProducts level, find the parent aisle of the selected shelf
-      const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
-        d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
-      )
-      const selectedAisle = selectedDepartment?.children?.find((a) => 
-        a.children?.some((s) => s.id === selectedShelfId)
-      )
-      return selectedAisle?.children || []
+      let parentAisle = null
+      
+      if (usingCustomTaxonomy) {
+        // For custom taxonomy, search through the hierarchy
+        for (const department of departmentsForSelectedSuperDepartment) {
+          if (department.children) {
+            for (const aisle of department.children) {
+              if (aisle.children?.some((s) => s.id === selectedShelfId)) {
+                parentAisle = aisle
+                break
+              }
+            }
+          }
+          if (parentAisle) break
+        }
+      } else {
+        // For API taxonomy, use the standard hierarchy
+        const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+          d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
+        )
+        parentAisle = selectedDepartment?.children?.find((a) => 
+          a.children?.some((s) => s.id === selectedShelfId)
+        )
+      }
+      
+      return parentAisle?.children || []
     }
     return []
-  }, [selectedAisleIdForTabs, selectedShelfId, departmentsForSelectedSuperDepartment])
+  }, [selectedAisleIdForTabs, selectedShelfId, departmentsForSelectedSuperDepartment, usingCustomTaxonomy])
 
   const getHeaderTitle = () => {
     switch (currentLevel) {
@@ -464,7 +506,7 @@ export default function TaxonomyPrototype5Page() {
   const handleShelfSelectForProducts = (shelfId: string) => {
     setSelectedShelfId(shelfId)
     setSelectedAisleIdForTabs(null)
-    setSelectedShelfTabId("all")
+    setSelectedShelfTabId(shelfId)
     setCurrentLevel("shelfProducts")
     fetchProducts(shelfId)
   }
@@ -477,14 +519,33 @@ export default function TaxonomyPrototype5Page() {
         fetchProducts(selectedAisleIdForTabs)
       } else if (selectedShelfId) {
         // We're on shelfProducts level, find the parent aisle
-        const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
-          d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
-        )
-        const selectedAisle = selectedDepartment?.children?.find((a) => 
-          a.children?.some((s) => s.id === selectedShelfId)
-        )
-        if (selectedAisle) {
-          fetchProducts(selectedAisle.id)
+        let parentAisle = null
+        
+        if (usingCustomTaxonomy) {
+          // For custom taxonomy, search through the hierarchy
+          for (const department of departmentsForSelectedSuperDepartment) {
+            if (department.children) {
+              for (const aisle of department.children) {
+                if (aisle.children?.some((s) => s.id === selectedShelfId)) {
+                  parentAisle = aisle
+                  break
+                }
+              }
+            }
+            if (parentAisle) break
+          }
+        } else {
+          // For API taxonomy, use the standard hierarchy
+          const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+            d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
+          )
+          parentAisle = selectedDepartment?.children?.find((a) => 
+            a.children?.some((s) => s.id === selectedShelfId)
+          )
+        }
+        
+        if (parentAisle) {
+          fetchProducts(parentAisle.id)
         }
       }
     } else {
@@ -512,7 +573,7 @@ export default function TaxonomyPrototype5Page() {
       setProductData(null)
       setSelectedAisleIdForTabs(null)
       setSelectedShelfId(null)
-      setSelectedShelfTabId("all")
+      setSelectedShelfTabId("all") // Reset to "all" when going back to department level
     }
   }
 
