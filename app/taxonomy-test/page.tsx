@@ -104,6 +104,7 @@ export default function TaxonomyTestPage() {
   const [editedData, setEditedData] = useState<CategoryWithParent[] | null>(null)
   const [loadingReset, setLoadingReset] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(new Set())
   const [editingParents, setEditingParents] = useState<Record<string, string>>({})
   const [editingRanks, setEditingRanks] = useState<Record<string, number>>({})
   const [editingNames, setEditingNames] = useState<Record<string, string>>({})
@@ -772,13 +773,27 @@ export default function TaxonomyTestPage() {
   }
 
   const toggleExpanded = (categoryId: string) => {
-    const newExpanded = new Set(expandedCategories)
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId)
-    } else {
-      newExpanded.add(categoryId)
-    }
-    setExpandedCategories(newExpanded)
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId)
+      } else {
+        newSet.add(categoryId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleCategoryIdExpanded = (categoryId: string) => {
+    setExpandedCategoryIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId)
+      } else {
+        newSet.add(categoryId)
+      }
+      return newSet
+    })
   }
 
   const copyToClipboard = (text: string) => {
@@ -1357,6 +1372,7 @@ export default function TaxonomyTestPage() {
   const renderCategory = (category: CategoryWithParent, level: number = 0, siblings: CategoryWithParent[] = []) => {
     const hasChildren = category.children && category.children.length > 0
     const isExpanded = expandedCategories.has(category.id)
+    const isCategoryIdExpanded = expandedCategoryIds.has(category.id)
     const currentRank = getCurrentRank(category.id, siblings)
     const isEditingParent = editingParents[category.id] !== undefined
     const isEditingRank = editingRanks[category.id] !== undefined
@@ -1380,6 +1396,11 @@ export default function TaxonomyTestPage() {
                   isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
                 ) : null}
               </Button>
+              
+              {/* Level Indicator */}
+              <div className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono flex-shrink-0" title={`Taxonomy Level ${level}`}>
+                L{level}
+              </div>
               
               {/* Image Thumbnail */}
               <div 
@@ -1435,17 +1456,34 @@ export default function TaxonomyTestPage() {
                     {category.name}
                   </span>
                 )}
-                <code className="text-xs bg-gray-100 px-1 rounded font-mono">{category.id}</code>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(category.id)}
-                  className="h-5 w-5 p-0 flex-shrink-0"
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
                 
-                {/* Parent ID Control - moved next to category ID */}
+                {/* Category ID - Compact and Clickable */}
+                {isCategoryIdExpanded ? (
+                  <div className="flex items-center gap-1">
+                    <code className="text-xs bg-gray-100 px-1 rounded font-mono cursor-pointer hover:bg-gray-200" onClick={() => toggleCategoryIdExpanded(category.id)}>
+                      {category.id}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(category.id)}
+                      className="h-5 w-5 p-0 flex-shrink-0"
+                      title="Copy category ID"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <code 
+                    className="text-xs bg-gray-100 px-1 rounded font-mono cursor-pointer hover:bg-gray-200 truncate max-w-[60px]" 
+                    onClick={() => toggleCategoryIdExpanded(category.id)}
+                    title={`Click to expand: ${category.id}`}
+                  >
+                    {category.id.length > 8 ? `${category.id.substring(0, 8)}...` : category.id}
+                  </code>
+                )}
+                
+                {/* Parent ID Control */}
                 {!isEditingParent && (
                   <Input
                     placeholder="Parent ID"
