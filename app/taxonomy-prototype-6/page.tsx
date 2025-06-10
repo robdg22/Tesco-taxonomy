@@ -17,6 +17,69 @@ import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-ta
 
 type NavigationLevel = "superDepartmentGrid" | "departmentTabs" | "shelfGrid" | "productListing" | "offersProducts" // Added offersProducts
 
+// Dynamic helper functions for taxonomy level detection
+const findCategoryById = (categories: TaxonomyItem[], targetId: string): TaxonomyItem | null => {
+  for (const category of categories) {
+    if (category.id === targetId) {
+      return category
+    }
+    if (category.children) {
+      const found = findCategoryById(category.children, targetId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+const shouldShowTabsForChildren = (children: TaxonomyItem[]): boolean => {
+  if (children.length <= 1) return false
+  return children.some(child => child.children && child.children.length > 0)
+}
+
+const getTabChildren = (category: TaxonomyItem): TaxonomyItem[] => {
+  if (!category.children) return []
+  
+  // If children have sub-children, show the children as tabs
+  if (shouldShowTabsForChildren(category.children)) {
+    return category.children
+  }
+  
+  // Otherwise, no tabs needed
+  return []
+}
+
+const findParentCategoryForTabs = (categories: TaxonomyItem[], selectedId: string): TaxonomyItem | null => {
+  // Find the category that should show tabs based on the selected category
+  const selectedCategory = findCategoryById(categories, selectedId)
+  if (!selectedCategory) return null
+  
+  // If the selected category has children that should show as tabs, return it
+  if (shouldShowTabsForChildren(selectedCategory.children || [])) {
+    return selectedCategory
+  }
+  
+  // Otherwise, find the parent that should show tabs
+  const findParent = (cats: TaxonomyItem[], targetId: string, parent: TaxonomyItem | null = null): TaxonomyItem | null => {
+    for (const cat of cats) {
+      if (cat.id === targetId) {
+        return parent
+      }
+      if (cat.children) {
+        const found = findParent(cat.children, targetId, cat)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  
+  const parent = findParent(categories, selectedId)
+  if (parent && shouldShowTabsForChildren(parent.children || [])) {
+    return parent
+  }
+  
+  return null
+}
+
 export default function TaxonomyPrototype6Page() {
   const [currentLevel, setCurrentLevel] = useState<NavigationLevel>("superDepartmentGrid")
   const [selectedSuperDepartmentId, setSelectedSuperDepartmentId] = useState<string | null>(null)
@@ -360,35 +423,33 @@ export default function TaxonomyPrototype6Page() {
 
   // Calculate current aisle shelves for tabs (works with both API and custom taxonomy)
   const currentAisleShelves = useMemo(() => {
-    if (selectedAisleId) {
-      // Find the selected aisle and get its children (shelves)
-      let selectedAisle = null
-      
-      if (usingCustomTaxonomy) {
-        // For custom taxonomy, check if departments have embedded children
-        const selectedDepartment = departments.find((d) =>
-          (d.children && d.children.some((a) => a.id === selectedAisleId)) ||
-          (d.id === selectedAisleId) // In case the "aisle" is actually a department
-        )
-        
-        if (selectedDepartment) {
-          if (selectedDepartment.id === selectedAisleId) {
-            // The selected "aisle" is actually a department, return its children
-            selectedAisle = selectedDepartment
-          } else {
-            // Find the actual aisle within the department
-            selectedAisle = selectedDepartment.children?.find((a) => a.id === selectedAisleId)
-          }
-        }
-      } else {
-        // For API taxonomy, use the standard hierarchy
-        selectedAisle = aisles.find((a) => a.id === selectedAisleId)
+    if (!superDepartmentsData) return []
+    
+    // Determine which category should show tabs based on current selections
+    let categoryForTabs: TaxonomyItem | null = null
+    
+    if (selectedShelfId) {
+      // If a shelf is selected, check if it should show tabs for its children
+      categoryForTabs = findCategoryById(superDepartmentsData, selectedShelfId)
+      if (categoryForTabs && shouldShowTabsForChildren(categoryForTabs.children || [])) {
+        return getTabChildren(categoryForTabs)
       }
       
-      return selectedAisle?.children || []
+      // If the shelf doesn't have tab-worthy children, check its parent
+      categoryForTabs = findParentCategoryForTabs(superDepartmentsData, selectedShelfId)
+    } else if (selectedAisleId) {
+      // If an aisle is selected, check if it should show tabs for its children
+      categoryForTabs = findCategoryById(superDepartmentsData, selectedAisleId)
+      if (categoryForTabs && shouldShowTabsForChildren(categoryForTabs.children || [])) {
+        return getTabChildren(categoryForTabs)
+      }
+      
+      // If the aisle doesn't have tab-worthy children, check its parent
+      categoryForTabs = findParentCategoryForTabs(superDepartmentsData, selectedAisleId)
     }
-    return []
-  }, [selectedAisleId, aisles, departments, usingCustomTaxonomy])
+    
+    return categoryForTabs ? getTabChildren(categoryForTabs) : []
+  }, [selectedAisleId, selectedShelfId, superDepartmentsData])
 
   // Handlers for navigation
   const handleSuperDepartmentSelect = async (id: string) => {
@@ -445,21 +506,65 @@ export default function TaxonomyPrototype6Page() {
   }
 
   const handleShelfSelect = (id: string) => {
-    setSelectedShelfId(id)
-    setSelectedShelfTabId(id)
-    setCurrentLevel("productListing")
-    fetchProducts(id) // Fetch products for the selected shelf
+    const selectedShelf = findCategoryById(superDepartmentsData || [], id)
+    if (!selectedShelf) {
+      console.error("Selected shelf not found:", id)
+      return
+    }
+    
+    // Check if this shelf has children that should show as tabs
+    const hasTabWorthyChildren = shouldShowTabsForChildren(selectedShelf.children || [])
+    
+    if (hasTabWorthyChildren) {
+      // If it has tab-worthy children, set up to show tabs for those children
+      setSelectedShelfId(id)
+      setSelectedShelfTabId("all") // Start with "all" to show all products from this shelf
+      setCurrentLevel("productListing")
+      fetchProducts(id) // Show all products from the shelf initially
+    } else {
+      // If no tab-worthy children, go directly to products for this shelf
+      setSelectedShelfId(id)
+      setSelectedShelfTabId(id) // Set tab to the actual shelf ID
+      setCurrentLevel("productListing")
+      fetchProducts(id)
+    }
   }
 
   const handleShelfTabClick = (id: string) => {
     setSelectedShelfTabId(id)
     if (id === "all") {
-      // If aisle is selected (came from aisle with multiple shelves), show all aisle products
-      if (selectedAisleId) {
-        fetchProducts(selectedAisleId)
+      // Find the parent category that should show "all" products
+      let parentCategoryId: string | null = null
+      
+      if (selectedShelfId) {
+        // If we have a selected shelf, check if it has tab-worthy children
+        const shelfCategory = findCategoryById(superDepartmentsData || [], selectedShelfId)
+        if (shelfCategory && shouldShowTabsForChildren(shelfCategory.children || [])) {
+          // Show all products from the shelf (parent of the tabs)
+          parentCategoryId = selectedShelfId
+        } else {
+          // Find the parent that has tab-worthy children
+          const parentForTabs = findParentCategoryForTabs(superDepartmentsData || [], selectedShelfId)
+          parentCategoryId = parentForTabs?.id || selectedShelfId
+        }
+      } else if (selectedAisleId) {
+        // If we have a selected aisle, check if it has tab-worthy children
+        const aisleCategory = findCategoryById(superDepartmentsData || [], selectedAisleId)
+        if (aisleCategory && shouldShowTabsForChildren(aisleCategory.children || [])) {
+          // Show all products from the aisle (parent of the tabs)
+          parentCategoryId = selectedAisleId
+        } else {
+          // Find the parent that has tab-worthy children
+          const parentForTabs = findParentCategoryForTabs(superDepartmentsData || [], selectedAisleId)
+          parentCategoryId = parentForTabs?.id || selectedAisleId
+        }
+      }
+      
+      if (parentCategoryId) {
+        fetchProducts(parentCategoryId)
       }
     } else {
-      // Show products for specific shelf
+      // Show products for the specific tab category
       fetchProducts(id)
     }
   }
