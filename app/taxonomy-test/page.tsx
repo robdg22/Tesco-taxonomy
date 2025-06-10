@@ -815,11 +815,34 @@ export default function TaxonomyTestPage() {
   }
 
   const generateCategoryId = (name: string): string => {
-    return name.toLowerCase()
+    const baseId = name.toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
+    
+    // Add random 4-digit number to make ID unique
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000)
+    return `${baseId}-${randomSuffix}`
+  }
+
+  const deleteCategory = (categoryId: string) => {
+    if (!editedData) return
+
+    const deleteCategoryFromTree = (categories: CategoryWithParent[]): CategoryWithParent[] => {
+      return categories.filter(category => {
+        if (category.id === categoryId) {
+          return false // Remove this category
+        }
+        if (category.children) {
+          category.children = deleteCategoryFromTree(category.children as CategoryWithParent[])
+        }
+        return true
+      })
+    }
+
+    const newData = deleteCategoryFromTree(JSON.parse(JSON.stringify(editedData)))
+    updateEditedDataWithHistory(newData)
   }
 
   const createNewRootCategory = () => {
@@ -1126,7 +1149,7 @@ export default function TaxonomyTestPage() {
     const currentImageUrl = getCurrentImageUrl(category)
 
     return (
-      <div key={category.id} className={`border border-gray-200 rounded-md mb-1 ${category.hidden ? 'opacity-50 bg-gray-50' : ''}`}>
+      <div key={category.id} className={`border border-gray-200 rounded-md mb-1 hover:bg-blue-50 hover:border-blue-300 transition-colors ${category.hidden ? 'opacity-50 bg-gray-50' : ''}`}>
         <div className="p-2">
           <div className="flex items-center gap-2 text-sm">
             <div className="flex items-center gap-1 min-w-0 flex-1">
@@ -1192,6 +1215,36 @@ export default function TaxonomyTestPage() {
                 >
                   <Copy className="h-3 w-3" />
                 </Button>
+                
+                {/* Parent ID Control - moved next to category ID */}
+                {!isEditingParent && (
+                  <Input
+                    placeholder="Parent ID"
+                    value={category.parentId || "root"}
+                    className="h-6 w-24 text-xs"
+                    onFocus={() => updateParentId(category.id, category.parentId || "root")}
+                    readOnly
+                  />
+                )}
+                
+                {isEditingParent && (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={editingParents[category.id]}
+                      onChange={(e) => updateParentId(category.id, e.target.value)}
+                      className="h-6 w-24 text-xs"
+                      onKeyPress={(e) => e.key === 'Enter' && applyParentChange(category.id)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => applyParentChange(category.id)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1233,33 +1286,16 @@ export default function TaxonomyTestPage() {
                 {category.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
               </Button>
               
-              {/* Parent ID Control */}
-              {!isEditingParent && (
-                <Input
-                  placeholder="Parent ID"
-                  className="h-6 w-24 text-xs"
-                  onFocus={() => updateParentId(category.id, category.parentId || "root")}
-                />
-              )}
-              
-              {isEditingParent && (
-                <div className="flex items-center gap-1">
-                  <Input
-                    value={editingParents[category.id]}
-                    onChange={(e) => updateParentId(category.id, e.target.value)}
-                    className="h-6 w-24 text-xs"
-                    onKeyPress={(e) => e.key === 'Enter' && applyParentChange(category.id)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyParentChange(category.id)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
+              {/* Delete Control */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteCategory(category.id)}
+                className="h-6 w-6 p-0 flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                title="Delete category"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
             </div>
           </div>
 
