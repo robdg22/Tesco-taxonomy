@@ -845,6 +845,125 @@ export default function TaxonomyTestPage() {
     updateEditedDataWithHistory(newData)
   }
 
+  // Enhanced cleanup function for duplicate IDs and data issues
+  const cleanupTaxonomyData = () => {
+    if (!editedData) return
+
+    const issues: string[] = []
+    const duplicateIds = new Map<string, number>()
+    const fixedCategories: CategoryWithParent[] = []
+
+    // Function to recursively process categories and fix issues
+    const processCategories = (categories: CategoryWithParent[], level: number = 0): CategoryWithParent[] => {
+      return categories.map((category, index) => {
+        const originalId = category.id
+        
+        // Track duplicate IDs
+        const currentCount = duplicateIds.get(originalId) || 0
+        duplicateIds.set(originalId, currentCount + 1)
+        
+        // Fix duplicate IDs by adding suffix
+        let newId = originalId
+        if (currentCount > 0) {
+          newId = `${originalId}-fix-${currentCount + 1}`
+          issues.push(`Fixed duplicate ID: ${originalId} → ${newId}`)
+        }
+        
+        // Process children recursively
+        const processedChildren = category.children ? 
+          processCategories(category.children as CategoryWithParent[], level + 1) : []
+        
+        return {
+          ...category,
+          id: newId,
+          children: processedChildren.length > 0 ? processedChildren : []
+        }
+      })
+    }
+
+    const cleanedData = processCategories(editedData)
+    
+    // Show cleanup report
+    const duplicateCount = Array.from(duplicateIds.values()).filter(count => count > 1).length
+    
+    if (issues.length > 0) {
+      const report = [
+        `🔧 Taxonomy Cleanup Report:`,
+        `• Fixed ${duplicateCount} duplicate ID issues`,
+        `• Total categories processed: ${duplicateIds.size}`,
+        ``,
+        `Detailed changes:`,
+        ...issues.slice(0, 10), // Show first 10 issues
+        ...(issues.length > 10 ? [`... and ${issues.length - 10} more fixes`] : [])
+      ].join('\n')
+      
+      if (confirm(`${report}\n\nApply these fixes?`)) {
+        updateEditedDataWithHistory(cleanedData)
+        alert(`✅ Cleanup completed! Fixed ${issues.length} issues.`)
+      }
+    } else {
+      alert('✅ No data issues found. Your taxonomy is clean!')
+    }
+  }
+
+  // Function to show detailed taxonomy statistics
+  const showTaxonomyStats = () => {
+    if (!editedData) return
+
+    const stats = {
+      totalCategories: 0,
+      duplicateIds: new Map<string, number>(),
+      maxDepth: 0,
+      categoriesPerLevel: new Map<number, number>()
+    }
+
+    const analyzeCategories = (categories: CategoryWithParent[], level: number = 0) => {
+      stats.maxDepth = Math.max(stats.maxDepth, level)
+      stats.categoriesPerLevel.set(level, (stats.categoriesPerLevel.get(level) || 0) + categories.length)
+      
+      categories.forEach(category => {
+        stats.totalCategories++
+        const currentCount = stats.duplicateIds.get(category.id) || 0
+        stats.duplicateIds.set(category.id, currentCount + 1)
+        
+        if (category.children && category.children.length > 0) {
+          analyzeCategories(category.children as CategoryWithParent[], level + 1)
+        }
+      })
+    }
+
+    analyzeCategories(editedData)
+
+    const duplicates = Array.from(stats.duplicateIds.entries()).filter(([_, count]) => count > 1)
+    const levelBreakdown = Array.from(stats.categoriesPerLevel.entries())
+      .map(([level, count]) => `  Level ${level}: ${count} categories`)
+      .join('\n')
+
+    const report = [
+      `📊 Taxonomy Statistics:`,
+      ``,
+      `📈 Overview:`,
+      `• Total categories: ${stats.totalCategories}`,
+      `• Maximum depth: ${stats.maxDepth} levels`,
+      `• Duplicate IDs: ${duplicates.length}`,
+      ``,
+      `📋 Categories per level:`,
+      levelBreakdown,
+      ``,
+      ...(duplicates.length > 0 ? [
+        `⚠️ Duplicate IDs found:`,
+        ...duplicates.slice(0, 5).map(([id, count]) => `• "${id}" appears ${count} times`),
+        ...(duplicates.length > 5 ? [`• ... and ${duplicates.length - 5} more duplicates`] : []),
+        ``,
+        `💡 Use "Fix Data Issues" to automatically resolve duplicates.`
+      ] : [
+        `✅ No duplicate IDs found!`
+      ])
+    ].join('\n')
+
+    alert(report)
+  }
+
   const createNewRootCategory = () => {
     if (!newCategoryName.trim() || !editedData) return
 
@@ -1354,6 +1473,30 @@ export default function TaxonomyTestPage() {
                 Clean
               </Button>
             </div>
+            
+            {/* Data Tools */}
+            {editedData && (
+              <div className="flex items-center gap-1">
+                <Button
+                  onClick={showTaxonomyStats}
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-xs"
+                  title="Show taxonomy statistics and duplicate ID report"
+                >
+                  📊 Stats
+                </Button>
+                <Button
+                  onClick={cleanupTaxonomyData}
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-xs text-orange-600 hover:text-orange-700"
+                  title="Fix duplicate IDs and other data issues"
+                >
+                  🔧 Fix Data
+                </Button>
+              </div>
+            )}
             
             {/* Taxonomy Selection */}
             <div className="flex items-center gap-2">
