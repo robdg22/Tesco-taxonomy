@@ -384,9 +384,18 @@ export default function TaxonomyPrototype5Page() {
       )
       const selectedAisle = selectedDepartment?.children?.find((a) => a.id === selectedAisleIdForTabs)
       return selectedAisle?.children || []
+    } else if (selectedShelfId) {
+      // For shelfProducts level, find the parent aisle of the selected shelf
+      const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+        d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
+      )
+      const selectedAisle = selectedDepartment?.children?.find((a) => 
+        a.children?.some((s) => s.id === selectedShelfId)
+      )
+      return selectedAisle?.children || []
     }
     return []
-  }, [selectedAisleIdForTabs, departmentsForSelectedSuperDepartment])
+  }, [selectedAisleIdForTabs, selectedShelfId, departmentsForSelectedSuperDepartment])
 
   const getHeaderTitle = () => {
     switch (currentLevel) {
@@ -463,7 +472,21 @@ export default function TaxonomyPrototype5Page() {
   const handleShelfTabClick = (id: string) => {
     setSelectedShelfTabId(id)
     if (id === "all") {
-      fetchProducts(selectedAisleIdForTabs!)
+      if (selectedAisleIdForTabs) {
+        // We're on aisleProductsWithTabs level
+        fetchProducts(selectedAisleIdForTabs)
+      } else if (selectedShelfId) {
+        // We're on shelfProducts level, find the parent aisle
+        const selectedDepartment = departmentsForSelectedSuperDepartment.find((d) =>
+          d.children?.some((a) => a.children?.some((s) => s.id === selectedShelfId))
+        )
+        const selectedAisle = selectedDepartment?.children?.find((a) => 
+          a.children?.some((s) => s.id === selectedShelfId)
+        )
+        if (selectedAisle) {
+          fetchProducts(selectedAisle.id)
+        }
+      }
     } else {
       fetchProducts(id)
     }
@@ -607,6 +630,13 @@ export default function TaxonomyPrototype5Page() {
           />
         )}
         {currentLevel === "aisleProductsWithTabs" && currentAisleShelves.length > 1 && (
+          <AisleShelfTabs
+            shelves={currentAisleShelves}
+            selectedShelfTabId={selectedShelfTabId}
+            onShelfTabClick={handleShelfTabClick}
+          />
+        )}
+        {currentLevel === "shelfProducts" && currentAisleShelves.length > 1 && (
           <AisleShelfTabs
             shelves={currentAisleShelves}
             selectedShelfTabId={selectedShelfTabId}

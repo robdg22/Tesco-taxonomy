@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button" // Import Button for special offers
+import { AisleShelfTabs } from "@/components/taxonomy-prototype-2/aisle-shelf-tabs"
 
 type NavigationLevel = "superDepartmentGrid" | "departmentTabs" | "shelfGrid" | "productListing" | "offersProducts" // Added offersProducts
 
@@ -22,6 +23,7 @@ export default function TaxonomyPrototype6Page() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null)
   const [selectedAisleId, setSelectedAisleId] = useState<string | null>(null)
   const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null)
+  const [selectedShelfTabId, setSelectedShelfTabId] = useState<string>("all")
 
   const [superDepartmentsData, setSuperDepartmentsData] = useState<TaxonomyItem[] | null>(null)
   const [fetchedBranches, setFetchedBranches] = useState<Map<string, TaxonomyItem[]>>(new Map())
@@ -405,13 +407,28 @@ export default function TaxonomyPrototype6Page() {
     }
     setSelectedAisleId(id)
     setSelectedShelfId(null)
+    setSelectedShelfTabId("all")
     setProductData(null)
   }
 
   const handleShelfSelect = (id: string) => {
     setSelectedShelfId(id)
+    setSelectedShelfTabId("all")
     setCurrentLevel("productListing")
     fetchProducts(id) // Fetch products for the selected shelf
+  }
+
+  const handleShelfTabClick = (id: string) => {
+    setSelectedShelfTabId(id)
+    if (id === "all") {
+      // If aisle is selected (came from aisle with multiple shelves), show all aisle products
+      if (selectedAisleId) {
+        fetchProducts(selectedAisleId)
+      }
+    } else {
+      // Show products for specific shelf
+      fetchProducts(id)
+    }
   }
 
   const handleSpecialOffersClick = (categoryId: string, categoryName: string) => {
@@ -428,16 +445,19 @@ export default function TaxonomyPrototype6Page() {
       } else if (selectedAisleId) {
         setCurrentLevel("departmentTabs")
       }
+      setSelectedShelfTabId("all")
       setProductData(null)
     } else if (currentLevel === "shelfGrid") {
       setCurrentLevel("departmentTabs")
       setSelectedAisleId(null)
+      setSelectedShelfTabId("all")
     } else if (currentLevel === "departmentTabs") {
       setCurrentLevel("superDepartmentGrid")
       setSelectedSuperDepartmentId(null)
       setSelectedDepartmentId(null)
       setSelectedAisleId(null)
       setSelectedShelfId(null)
+      setSelectedShelfTabId("all")
     }
   }
 
@@ -580,6 +600,13 @@ export default function TaxonomyPrototype6Page() {
             departments={departments}
             onSelectDepartment={handleDepartmentSelect}
             selectedDepartmentId={selectedDepartmentId}
+          />
+        )}
+        {currentLevel === "productListing" && selectedAisleId && shelves.length > 1 && (
+          <AisleShelfTabs
+            shelves={shelves}
+            selectedShelfTabId={selectedShelfTabId}
+            onShelfTabClick={handleShelfTabClick}
           />
         )}
         {renderSpecialOffersButton()} {/* Render the special offers button */}
