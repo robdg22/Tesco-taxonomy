@@ -51,9 +51,15 @@ export function ProductGrid({ products, totalCount }: ProductGridProps) {
                 <p className="text-center text-sm font-medium line-clamp-2 mb-1">{product.title}</p>
                 <p className="text-center text-base font-bold text-green-700 mb-2">£{product.price.price.toFixed(2)}</p>
                 
+                {product.promotions?.[0]?.offerText && (
+                  <div className="mb-2 px-2 py-1 bg-yellow-400 text-black text-xs font-semibold rounded-sm text-center w-auto">
+                    {product.promotions[0].offerText}
+                  </div>
+                )}
+
                 <Button 
                   onClick={() => handleAddToBasket(product.id)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 mb-2"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-3 mb-2 w-auto"
                   size="sm"
                 >
                   Add
@@ -63,12 +69,6 @@ export function ProductGrid({ products, totalCount }: ProductGridProps) {
                   <div className="flex items-center gap-1 text-green-700 text-xs font-medium">
                     <Check className="h-3 w-3" />
                     <span>1 x added to basket</span>
-                  </div>
-                )}
-
-                {product.promotions?.[0]?.offerText && (
-                  <div className="mt-2 px-2 py-1 bg-yellow-400 text-black text-xs font-semibold rounded-sm text-center w-full">
-                    {product.promotions[0].offerText}
                   </div>
                 )}
               </CardContent>
