@@ -512,11 +512,12 @@ export default function TaxonomyPrototype6Page() {
     }
 
     if (categoryId && categoryName) {
+      const isProductLevel = currentLevel === "productListing" || currentLevel === "offersProducts"
       return (
-        <div className="p-4 pt-4">
+        <div className={`p-4 pt-4 ${isProductLevel ? 'flex justify-center' : ''}`}>
           <Button
             onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
-            className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
+            className={`font-bold bg-yellow-400 text-black hover:bg-yellow-500 ${isProductLevel ? 'w-auto' : 'w-full'}`}
           >
             Special offers in {categoryName}
           </Button>
