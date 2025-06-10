@@ -426,7 +426,7 @@ export default function TaxonomyPrototype2Page() {
 
     if (categoryId && categoryName) {
       return (
-        <div className="p-4 pt-0">
+        <div className="p-4 pt-4">
           <Button
             onClick={() => handleSpecialOffersClick(categoryId!, categoryName!)}
             className="w-full bg-yellow-400 text-black hover:bg-yellow-500"
