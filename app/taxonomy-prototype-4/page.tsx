@@ -675,7 +675,11 @@ export default function TaxonomyPrototype4Page() {
   }, [selectedAisleId, selectedShelfId, taxonomyData])
 
   const renderShelfTabs = () => {
-    if (currentLevel !== "aisleProducts") return null
+    // Show tabs for both aisleProducts and products levels when there are multiple shelves/sub-shelves
+    if (currentLevel !== "aisleProducts" && currentLevel !== "products") return null
+    
+    // Only show tabs if there are multiple shelves/sub-shelves
+    if (currentAisleShelves.length <= 1) return null
 
     return (
       <ScrollArea className="w-full whitespace-nowrap h-12">
