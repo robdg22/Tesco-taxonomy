@@ -17,4 +17,4 @@ If the fonts are not available, the system will fall back to Arial, Helvetica, a
 
 ## Font Licensing
 
-Make sure you have the proper licensing for the Tesco Modern fonts before adding them to this directory. 
+Make sure you have the proper licensing for the Tesco Modern fonts before adding them to this directory.
