@@ -1,0 +1,114 @@
+/* Tesco Typography - Extracted from Figma Design */
+
+/* Font Face Declarations */
+@font-face {
+  font-family: 'TESCO Modern';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  /* Note: You'll need to add the actual font files */
+  src: url('/fonts/tesco-modern-regular.woff2') format('woff2'),
+       url('/fonts/tesco-modern-regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'TESCO Modern';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/tesco-modern-bold.woff2') format('woff2'),
+       url('/fonts/tesco-modern-bold.woff') format('woff');
+}
+
+/* Typography Scale from Figma Design */
+:root {
+  --font-family-tesco: 'TESCO Modern', Arial, Helvetica, sans-serif;
+}
+
+/* Text Styles from Figma */
+.text-label-s {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.text-body-m {
+  font-family: var(--font-family-tesco);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.text-link-standalone-m {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.text-label-m {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.text-body-xs {
+  font-family: var(--font-family-tesco);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.text-body-bold-m {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* Utility Classes */
+.font-tesco {
+  font-family: var(--font-family-tesco);
+}
+
+.font-tesco-regular {
+  font-family: var(--font-family-tesco);
+  font-weight: 400;
+}
+
+.font-tesco-bold {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+}
+
+/* Navigation specific styles */
+.nav-link {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--tesco-blue);
+}
+
+.nav-link:hover {
+  color: var(--tesco-blue-hover);
+  text-decoration: underline;
+}
+
+/* Button text styles */
+.btn-text {
+  font-family: var(--font-family-tesco);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* Small text styles */
+.text-small {
+  font-family: var(--font-family-tesco);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+} 

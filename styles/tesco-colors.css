@@ -1,0 +1,53 @@
+/* Tesco Brand Colors - Extracted from Figma Design */
+:root {
+  --tesco-blue: #00539F;
+  --tesco-blue-hover: #007EB3;
+  --tesco-blue-light: #E6F3FF;
+  --tesco-blue-dark: #003D75;
+}
+
+/* Utility classes for Tesco brand colors */
+.bg-tesco-blue {
+  background-color: var(--tesco-blue);
+}
+
+.bg-tesco-blue-hover:hover {
+  background-color: var(--tesco-blue-hover);
+}
+
+.text-tesco-blue {
+  color: var(--tesco-blue);
+}
+
+.text-tesco-blue-hover:hover {
+  color: var(--tesco-blue-hover);
+}
+
+.border-tesco-blue {
+  border-color: var(--tesco-blue);
+}
+
+.border-tesco-blue-hover:hover {
+  border-color: var(--tesco-blue-hover);
+}
+
+/* Link styles */
+.link-tesco {
+  color: var(--tesco-blue);
+  text-decoration: none;
+}
+
+.link-tesco:hover {
+  color: var(--tesco-blue-hover);
+  text-decoration: underline;
+}
+
+/* Combined utility classes */
+.btn-tesco-primary {
+  background-color: var(--tesco-blue);
+  color: white;
+}
+
+.btn-tesco-primary:hover {
+  background-color: var(--tesco-blue-hover);
+} 

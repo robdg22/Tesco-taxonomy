@@ -2,8 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import Tesco brand colors */
+@import './tesco-colors.css';
+
+/* Import Tesco typography */
+@import './tesco-typography.css';
+
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-family-tesco, Arial, Helvetica, sans-serif);
 }
 
 @layer utilities {
