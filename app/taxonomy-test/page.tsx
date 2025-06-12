@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -98,7 +98,7 @@ interface SavedTaxonomy {
   isActive: boolean
 }
 
-export default function TaxonomyTestPage() {
+function TaxonomyTestPageContent() {
   const router = useRouter()
   const [originalData, setOriginalData] = useState<TaxonomyItem[] | null>(null)
   const [editedData, setEditedData] = useState<CategoryWithParent[] | null>(null)
@@ -1900,5 +1900,13 @@ export default function TaxonomyTestPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function TaxonomyTestPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <TaxonomyTestPageContent />
+    </Suspense>
   )
 }
