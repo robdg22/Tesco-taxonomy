@@ -97,4 +97,4 @@ export async function GET() {
     console.error('Error getting logo:', error)
     return NextResponse.json({ error: 'Failed to get logo' }, { status: 500 })
   }
-} 
+}

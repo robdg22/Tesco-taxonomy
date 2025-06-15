@@ -821,4 +821,4 @@ export default function TaxonomyPrototype7Page() {
       </div>
     </div>
   )
-} 
+}
