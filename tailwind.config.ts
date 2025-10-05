@@ -10,7 +10,16 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			'tesco': ['Tesco Modern', 'Arial', 'Helvetica', 'sans-serif'],
+  			'tesco-regular': ['Tesco Modern', 'Arial', 'Helvetica', 'sans-serif'],
+  			'tesco-bold': ['Tesco Modern', 'Arial', 'Helvetica', 'sans-serif'],
+  		},
   		colors: {
+  			'tesco-blue': '#00539f',
+  			'tesco-blue-secondary': '#007eb3',
+  			'tesco-grey': '#666666',
+  			'tesco-border': '#cccccc',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

@@ -2,8 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tesco Modern Fonts */
+@font-face {
+  font-family: 'Tesco Modern';
+  src: url('/fonts/TESCOModern-Regular-web.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tesco Modern';
+  src: url('/fonts/TESCOModern-Bold-web.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Tesco Modern', Arial, Helvetica, sans-serif;
 }
 
 @layer utilities {
