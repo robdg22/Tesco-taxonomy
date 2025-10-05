@@ -157,12 +157,17 @@ export default function TaxonomyPrototype9Page() {
       setLoading(true)
       setError(null)
       try {
-        const variables = {
+        const variables: Record<string, any> = {
           storeId: "3060",
-          categoryId: categoryId || null,
           style: "thumbnail",
           includeInspirationEvents: false,
         }
+        
+        // Only include categoryId if it's provided
+        if (categoryId) {
+          variables.categoryId = categoryId
+        }
+        
         console.log("Fetching taxonomy with variables:", variables)
         const result = await graphqlRequest<GetTaxonomyResponse>(TAXONOMY_QUERY, variables)
         if (result.data?.taxonomy) {
@@ -257,13 +262,19 @@ export default function TaxonomyPrototype9Page() {
     const loadLogo = async () => {
       try {
         const response = await fetch("/api/upload-logo")
-        const result = await response.json()
-        if (result.success && result.url) {
-          setLogoUrl(result.url)
-          console.log("Logo loaded from:", result.source)
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && result.url) {
+            setLogoUrl(result.url)
+            console.log("Logo loaded from:", result.source)
+          }
+        } else {
+          console.warn("Logo API returned error, using default logo")
+          setLogoUrl("/tesco-logo.svg")
         }
       } catch (error) {
         console.error("Error loading logo:", error)
+        setLogoUrl("/tesco-logo.svg")
       }
     }
 
