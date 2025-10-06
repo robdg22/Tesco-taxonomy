@@ -689,4 +689,3 @@ export default function TaxonomyPrototype9Page() {
     </div>
   )
 }
-

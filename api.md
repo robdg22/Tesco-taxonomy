@@ -5,7 +5,7 @@ You are tasked with setting up a Next.js project to access the Tesco shopping ex
 ## 1. Project Setup
 
 Create a Next.js 15+ project with the following structure:
-```
+\`\`\`
 project/
 ├── app/
 │   ├── api/
@@ -18,12 +18,12 @@ project/
 │   └── tesco.ts
 ├── next.config.mjs
 └── package.json
-```
+\`\`\`
 
 ## 2. Package Dependencies
 
 Add these dependencies to your `package.json`:
-```json
+\`\`\`json
 {
   "dependencies": {
     "@vercel/blob": "latest",
@@ -38,12 +38,12 @@ Add these dependencies to your `package.json`:
     "@types/react-dom": "^19"
   }
 }
-```
+\`\`\`
 
 ## 3. Next.js Configuration
 
 Create `next.config.mjs`:
-```javascript
+\`\`\`javascript
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -58,7 +58,7 @@ const nextConfig = {
 }
 
 export default nextConfig
-```
+\`\`\`
 
 ## 4. API Proxy Route
 
@@ -71,7 +71,7 @@ Create `app/api/tesco/route.ts` with these EXACT specifications:
 - **User-Agent**: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36`
 
 ### Implementation:
-```typescript
+\`\`\`typescript
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
@@ -116,12 +116,12 @@ export async function OPTIONS() {
     },
   })
 }
-```
+\`\`\`
 
 ## 5. GraphQL Client
 
 Create `lib/graphql-client.ts`:
-```typescript
+\`\`\`typescript
 interface GraphQLResponse<T> {
   data?: T
   errors?: Array<{ message: string }>
@@ -155,12 +155,12 @@ export async function graphqlRequest<T>(
     }
   }
 }
-```
+\`\`\`
 
 ## 6. TypeScript Types
 
 Create `types/tesco.ts`:
-```typescript
+\`\`\`typescript
 export interface Image {
   type: string
   url: string
@@ -227,12 +227,12 @@ export interface GetCategoryProductsResponse {
     productItems: ProductItem[]
   }
 }
-```
+\`\`\`
 
 ## 7. Example GraphQL Queries
 
 ### Taxonomy Query
-```graphql
+\`\`\`graphql
 query GetTaxonomy(
   $storeId: ID
   $includeInspirationEvents: Boolean
@@ -304,10 +304,10 @@ query GetTaxonomy(
     }
   }
 }
-```
+\`\`\`
 
 ### Product Query
-```graphql
+\`\`\`graphql
 query GetCategoryProducts(
   $categoryId: ID
   $page: Int
@@ -363,12 +363,12 @@ query GetCategoryProducts(
     }
   }
 }
-```
+\`\`\`
 
 ## 8. Usage Example
 
 Create a test page to demonstrate the API integration:
-```typescript
+\`\`\`typescript
 "use client"
 
 import { useState, useEffect } from "react"
@@ -432,24 +432,24 @@ export default function TestPage() {
     </div>
   )
 }
-```
+\`\`\`
 
 ## 9. Vercel Deployment
 
 ### Environment Detection
 The setup automatically detects Vercel environment:
-```typescript
+\`\`\`typescript
 const isVercel = process.env.VERCEL === '1'
-```
+\`\`\`
 
 ### Optional: Vercel Blob Storage
 If you need persistent storage, add Vercel Blob integration:
-```typescript
+\`\`\`typescript
 if (isVercel) {
   const { put, list } = await import('@vercel/blob')
   // Use for storing custom data
 }
-```
+\`\`\`
 
 ## 10. Critical Implementation Notes
 
