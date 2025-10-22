@@ -438,17 +438,31 @@ export default function TaxonomyPrototype10Page() {
       {/* Design System Styled Multi-level Flyout Menu - Appears Below Header */}
       {showAllDepartmentsMenu && (
         <div
-          className="absolute top-full left-0 right-0 bg-white shadow-lg z-50"
+          className="absolute top-full left-0 right-0 bg-white shadow-lg z-50 flex flex-col"
           data-dropdown="all-departments"
           onMouseLeave={() => {
             setHoveredLevel1Id(null)
             setHoveredLevel2Id(null)
           }}
-          style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}
+          style={{ maxHeight: "calc(100vh - 200px)" }}
         >
-          <div className="flex" style={{ borderTopWidth: "4px", borderTopColor: "#007EB3" }}>
+          {/* Close Button Bar */}
+          <div className="flex items-center justify-end px-4 py-3" style={{ borderBottomWidth: "1px", borderBottomColor: "#CCCCCC" }}>
+            <button
+              onClick={() => setShowAllDepartmentsMenu(false)}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <span className="font-bold text-sm" style={{ color: "#00539F" }}>Close</span>
+              <div className="flex items-center justify-center p-1 rounded-full border-2" style={{ borderColor: "#00539F" }}>
+                <X className="h-4 w-4" style={{ color: "#00539F" }} />
+              </div>
+            </button>
+          </div>
+
+          {/* Three Equal Columns */}
+          <div className="flex flex-1 overflow-hidden" style={{ borderTopWidth: "4px", borderTopColor: "#007EB3" }}>
             {/* Level 1 Column */}
-            <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px" }}>
+            <div className="bg-white overflow-y-auto flex-1" style={{ borderRightWidth: "1px", borderRightColor: "#E5E5E5" }}>
               <div className="space-y-0">
                 {superDepartments.map((dept) => (
                   <button
@@ -481,8 +495,8 @@ export default function TaxonomyPrototype10Page() {
             </div>
 
             {/* Level 2 Column */}
-            {level2Items.length > 0 && (
-              <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px", borderLeftWidth: "1px", borderLeftColor: "#E5E5E5" }}>
+            <div className="bg-white overflow-y-auto flex-1" style={{ borderRightWidth: "1px", borderRightColor: "#E5E5E5" }}>
+              {level2Items.length > 0 ? (
                 <div className="space-y-0">
                   {level2Items.map((item) => (
                     <button
@@ -509,12 +523,16 @@ export default function TaxonomyPrototype10Page() {
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : hoveredLevel1Id !== null ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500 text-center text-sm">Select a category to browse</p>
+                </div>
+              ) : null}
+            </div>
 
             {/* Level 3 Column - Title Only */}
-            {level3Items.length > 0 && (
-              <div className="bg-white overflow-y-auto flex-shrink-0 flex-1" style={{ borderLeftWidth: "1px", borderLeftColor: "#E5E5E5", minWidth: "200px" }}>
+            <div className="bg-white overflow-y-auto flex-1">
+              {level3Items.length > 0 ? (
                 <div className="space-y-0">
                   {level3Items.map((item) => (
                     <button
@@ -534,15 +552,12 @@ export default function TaxonomyPrototype10Page() {
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Empty state when hovering level 1 */}
-            {level2Items.length === 0 && hoveredLevel1Id !== null && (
-              <div className="flex-1 bg-white flex items-center justify-center" style={{ borderLeftWidth: "1px", borderLeftColor: "#E5E5E5", minHeight: "200px" }}>
-                <p className="text-gray-500 text-center text-sm">Select a category to browse</p>
-              </div>
-            )}
+              ) : hoveredLevel1Id !== null && level2Items.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500 text-center text-sm">No subcategories</p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
