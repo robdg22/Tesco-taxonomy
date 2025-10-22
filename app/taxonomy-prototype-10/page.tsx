@@ -25,10 +25,7 @@ export default function TaxonomyPrototype10Page() {
   const [error, setError] = useState<string | null>(null)
   const [showAllDepartmentsMenu, setShowAllDepartmentsMenu] = useState(false)
 
-  // State for the active tab when viewing products
   const [selectedTabCategoryId, setSelectedTabCategoryId] = useState<string | null>(null)
-
-  // State for hover-based multi-level navigation
   const [hoveredLevel1Id, setHoveredLevel1Id] = useState<string | null>(null)
   const [hoveredLevel2Id, setHoveredLevel2Id] = useState<string | null>(null)
 
@@ -280,21 +277,18 @@ export default function TaxonomyPrototype10Page() {
     return taxonomyData || []
   }, [taxonomyData])
 
-  // Get level 2 categories based on hovered level 1 item
   const level2Items = useMemo(() => {
     if (!hoveredLevel1Id) return []
     const parent = superDepartments.find((item) => item.id === hoveredLevel1Id)
     return parent?.children || []
   }, [hoveredLevel1Id, superDepartments])
 
-  // Get level 3 categories based on hovered level 2 item
   const level3Items = useMemo(() => {
     if (!hoveredLevel2Id || level2Items.length === 0) return []
     const parent = level2Items.find((item) => item.id === hoveredLevel2Id)
     return parent?.children || []
   }, [hoveredLevel2Id, level2Items])
 
-  // Handle click on a category at any level
   const handleCategoryClick = (item: TaxonomyItem) => {
     setCurrentPath([item])
     setShowProducts(true)
@@ -338,7 +332,6 @@ export default function TaxonomyPrototype10Page() {
     fetchProducts(tabId)
   }
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showAllDepartmentsMenu) {
@@ -356,44 +349,24 @@ export default function TaxonomyPrototype10Page() {
     }
   }, [showAllDepartmentsMenu])
 
-  // Top Navigation Component
   const TopNavigation = () => (
     <div className="text-white text-small" style={{ backgroundColor: "#00539F" }}>
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-end space-x-6 py-2">
-          <a href="#" className="hover:underline font-tesco-regular">
-            Tesco Bank
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Tesco Mobile
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Delivery saver
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Store locator
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            My orders
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Help
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Feedback
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            My account
-          </a>
-          <a href="#" className="hover:underline font-tesco-regular">
-            Sign out
-          </a>
+          <a href="#" className="hover:underline font-tesco-regular">Tesco Bank</a>
+          <a href="#" className="hover:underline font-tesco-regular">Tesco Mobile</a>
+          <a href="#" className="hover:underline font-tesco-regular">Delivery saver</a>
+          <a href="#" className="hover:underline font-tesco-regular">Store locator</a>
+          <a href="#" className="hover:underline font-tesco-regular">My orders</a>
+          <a href="#" className="hover:underline font-tesco-regular">Help</a>
+          <a href="#" className="hover:underline font-tesco-regular">Feedback</a>
+          <a href="#" className="hover:underline font-tesco-regular">My account</a>
+          <a href="#" className="hover:underline font-tesco-regular">Sign out</a>
         </div>
       </div>
     </div>
   )
 
-  // Header Component
   const Header = () => (
     <div className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4">
@@ -440,7 +413,6 @@ export default function TaxonomyPrototype10Page() {
     </div>
   )
 
-  // Main Navigation Component (Dropdown)
   const MainNavigation = () => (
     <div className="bg-white border-b border-gray-200 relative">
       <div className="max-w-7xl mx-auto px-4">
@@ -453,54 +425,47 @@ export default function TaxonomyPrototype10Page() {
             <span>All departments</span>
             <ChevronDown className={cn("h-4 w-4 transition-transform", showAllDepartmentsMenu && "rotate-180")} />
           </button>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            Groceries & Essentials
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            My Favourites
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            Special Offers
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            Summer
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            Tesco Clubcard
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            F&F Clothing
-          </a>
-          <a href="#" className="font-bold" style={{ color: "#00539F" }}>
-            Recipes
-          </a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>Groceries & Essentials</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>My Favourites</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>Special Offers</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>Summer</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>Tesco Clubcard</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>F&F Clothing</a>
+          <a href="#" className="font-bold" style={{ color: "#00539F" }}>Recipes</a>
         </div>
       </div>
 
-      {/* Multi-level Hover-based Flyout Menu */}
+      {/* Design System Styled Multi-level Flyout Menu */}
       {showAllDepartmentsMenu && (
         <div
-          className="fixed top-0 left-0 right-0 bottom-0 bg-white shadow-2xl z-50 flex flex-col"
+          className="fixed top-0 left-0 right-0 bottom-0 bg-white z-50 flex flex-col"
           data-dropdown="all-departments"
           onMouseLeave={() => {
             setHoveredLevel1Id(null)
             setHoveredLevel2Id(null)
           }}
+          style={{ borderTopWidth: "4px", borderTopColor: "#007EB3" }}
         >
-          {/* Close Button */}
-          <div className="absolute top-4 right-4 z-10">
-            <button
-              onClick={() => setShowAllDepartmentsMenu(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <X className="h-6 w-6" style={{ color: "#00539F" }} />
-            </button>
+          {/* Top Bar with Close Button */}
+          <div className="bg-white" style={{ borderBottomWidth: "1px", borderBottomColor: "#CCCCCC" }}>
+            <div className="flex items-center justify-between px-4 py-2">
+              <div />
+              <button
+                onClick={() => setShowAllDepartmentsMenu(false)}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <span className="font-bold text-sm" style={{ color: "#00539F" }}>Close</span>
+                <div className="flex items-center justify-center p-1 rounded-full border-2" style={{ borderColor: "#00539F" }}>
+                  <X className="h-4 w-4" style={{ color: "#00539F" }} />
+                </div>
+              </button>
+            </div>
           </div>
 
-          {/* Main Content Area */}
+          {/* Main Content - Three Columns */}
           <div className="flex flex-1 overflow-hidden">
-            {/* Level 1 - Top-level Categories */}
-            <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
+            {/* Level 1 Column */}
+            <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px" }}>
               <div className="space-y-0">
                 {superDepartments.map((dept) => (
                   <button
@@ -510,20 +475,18 @@ export default function TaxonomyPrototype10Page() {
                       setHoveredLevel2Id(null)
                     }}
                     onClick={() => handleCategoryClick(dept)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-4 py-3 text-left transition-all duration-150 border-b border-gray-100",
-                      hoveredLevel1Id === dept.id ? "text-white" : "hover:bg-gray-50",
-                    )}
-                    style={
-                      hoveredLevel1Id === dept.id
-                        ? { backgroundColor: "#00539F" }
-                        : { color: "#00539F" }
-                    }
+                    className="w-full flex items-center justify-between px-3 py-2 text-left transition-colors"
+                    style={{
+                      backgroundColor: hoveredLevel1Id === dept.id ? "#007EB3" : "white",
+                      color: hoveredLevel1Id === dept.id ? "white" : "#00539F",
+                      borderBottomWidth: "1px",
+                      borderBottomColor: "#E5E5E5",
+                    }}
                   >
-                    <span className="font-tesco-regular text-sm">{dept.name}</span>
+                    <span className="text-sm font-normal leading-5">{dept.name}</span>
                     {(dept.children?.length || 0) > 0 && (
                       <ChevronDown
-                        className="h-4 w-4"
+                        className="h-4 w-4 flex-shrink-0"
                         style={{
                           color: hoveredLevel1Id === dept.id ? "white" : "#00539F",
                         }}
@@ -534,29 +497,27 @@ export default function TaxonomyPrototype10Page() {
               </div>
             </div>
 
-            {/* Level 2 - Second-level Categories */}
+            {/* Level 2 Column */}
             {level2Items.length > 0 && (
-              <div className="w-64 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+              <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px", borderRightWidth: "1px", borderRightColor: "#E5E5E5" }}>
                 <div className="space-y-0">
                   {level2Items.map((item) => (
                     <button
                       key={item.id}
                       onMouseEnter={() => setHoveredLevel2Id(item.id)}
                       onClick={() => handleCategoryClick(item)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-3 text-left transition-all duration-150 border-b border-gray-200",
-                        hoveredLevel2Id === item.id ? "text-white" : "hover:bg-white",
-                      )}
-                      style={
-                        hoveredLevel2Id === item.id
-                          ? { backgroundColor: "#00539F" }
-                          : { color: "#00539F" }
-                      }
+                      className="w-full flex items-center justify-between px-3 py-2 text-left transition-colors"
+                      style={{
+                        backgroundColor: hoveredLevel2Id === item.id ? "#007EB3" : "white",
+                        color: hoveredLevel2Id === item.id ? "white" : "#00539F",
+                        borderBottomWidth: "1px",
+                        borderBottomColor: "#E5E5E5",
+                      }}
                     >
-                      <span className="font-tesco-regular text-sm">{item.name}</span>
+                      <span className="text-sm font-normal leading-5">{item.name}</span>
                       {(item.children?.length || 0) > 0 && (
                         <ChevronDown
-                          className="h-4 w-4"
+                          className="h-4 w-4 flex-shrink-0"
                           style={{
                             color: hoveredLevel2Id === item.id ? "white" : "#00539F",
                           }}
@@ -568,54 +529,53 @@ export default function TaxonomyPrototype10Page() {
               </div>
             )}
 
-            {/* Level 3 - Third-level Categories */}
-            {level3Items.length > 0 && (
-              <div className="flex-1 bg-white overflow-y-auto p-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {/* Level 3 Column */}
+            <div className="flex-1 bg-white overflow-y-auto">
+              {level3Items.length > 0 ? (
+                <div className="p-3 space-y-1">
                   {level3Items.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleCategoryClick(item)}
-                      className="flex flex-col items-center text-center p-3 rounded-lg hover:shadow-md transition-all duration-200 hover:bg-gray-50"
+                      className="w-full flex items-start gap-3 px-3 py-2 rounded transition-colors"
+                      style={{ color: "#00539F" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F5F5F5")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                     >
-                      <div className="w-16 h-16 mb-2 relative flex items-center justify-center">
+                      <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center">
                         <img
                           src={
                             item.images?.[0]?.images?.[0]?.url ||
-                            "/placeholder.svg?height=64&width=64&query=category icon" ||
+                            "/placeholder.svg?height=48&width=48" ||
                             "/placeholder.svg"
                           }
                           alt={item.name}
-                          width={64}
-                          height={64}
+                          width={48}
+                          height={48}
                           className="object-contain"
                           onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=64&width=64"
+                            e.currentTarget.src = "/placeholder.svg?height=48&width=48"
                           }}
                         />
                       </div>
-                      <span className="font-semibold text-xs" style={{ color: "#00539F" }}>
-                        {item.name}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-normal truncate">{item.name}</p>
+                      </div>
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Empty state or welcome message when no level 2 items */}
-            {level2Items.length === 0 && hoveredLevel1Id !== null && (
-              <div className="flex-1 bg-white flex items-center justify-center">
-                <p className="text-gray-500 text-center">Select a category to browse</p>
-              </div>
-            )}
+              ) : hoveredLevel1Id !== null ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500 text-center text-sm">Select a category to browse</p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
     </div>
   )
 
-  // Main Content Area
   const MainContentArea = () => {
     if (loading) {
       return (
