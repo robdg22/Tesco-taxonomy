@@ -380,7 +380,7 @@ export default function TaxonomyPrototype9Page() {
   const UtilityBar = () => (
     <div className="bg-tesco-blue h-[32px] flex items-center justify-end">
       <div className="flex">
-        {["Tesco Bank", "Tesco Mobile", "Delivery saver", "Store locator", "My orders", "Help", "Feedback", "My account", "Sign out"].map((item, index) => (
+        {["Tesco Bank", "Tesco Mobile", "Delivery Saver", "Store locator", "Help", "Feedback"].map((item, index) => (
           <button
             key={index}
             className="h-[32px] px-[20px] py-[4px] flex items-center justify-center border-l border-white/40 hover:bg-white/10 transition-colors"
@@ -423,8 +423,8 @@ export default function TaxonomyPrototype9Page() {
           </div>
         </div>
 
-        {/* Basket */}
-        <div className="py-[16px]">
+        {/* Right side - Basket */}
+        <div className="flex items-center gap-[24px] py-[16px]">
           <div className="flex items-center gap-[8px]">
             <button className="bg-tesco-blue hover:bg-tesco-blue-secondary rounded-[20px] p-[8px] flex items-center justify-center transition-colors">
               <ShoppingBasket className="w-[24px] h-[24px] text-white" strokeWidth={2} />
@@ -445,26 +445,33 @@ export default function TaxonomyPrototype9Page() {
 
   // Local Navigation Component
   const LocalNavigation = () => (
-    <div className="bg-white h-[44px] flex items-center gap-[16px] border-b border-tesco-border">
-      <button
-        onClick={handleToggleAllDepartments}
-        className="flex items-center gap-[8px] px-[8px] py-[10px] hover:bg-gray-50 transition-colors"
-      >
-        <span className="font-tesco font-bold text-[16px] leading-[20px] text-tesco-blue whitespace-nowrap">
-          All Departments
-        </span>
-        <ChevronDown className={cn("w-[24px] h-[24px] text-tesco-blue transition-transform", showAllDepartmentsMenu && "rotate-180")} />
-      </button>
-      {["Groceries & Essentials", "My Favourites", "Special Offers", "Summer", "Tesco Clubcard", "F&F Clothing", "Recipes"].map((item, index) => (
+    <div className="bg-white">
+      <div className="flex items-center gap-[16px] border-b border-tesco-border h-[44px]">
         <button
-          key={index}
-          className="px-[8px] py-[12px] hover:bg-gray-50 transition-colors"
+          onClick={handleToggleAllDepartments}
+          className="flex items-center gap-[8px] px-[8px] py-[10px] hover:bg-gray-50 transition-colors"
         >
           <span className="font-tesco font-bold text-[16px] leading-[20px] text-tesco-blue whitespace-nowrap">
-            {item}
+            All Departments
           </span>
+          <ChevronDown className={cn("w-[24px] h-[24px] text-tesco-blue transition-transform", showAllDepartmentsMenu && "rotate-180")} />
         </button>
-      ))}
+        {["Groceries & Essentials", "My Favourites", "Special Offers", "Tesco Clubcard", "F&F Clothing", "Halloween", "Recipes"].map((item, index) => (
+          <button
+            key={index}
+            className="px-[8px] py-[12px] hover:bg-gray-50 transition-colors"
+          >
+            <span className="font-tesco font-bold text-[16px] leading-[20px] text-tesco-blue whitespace-nowrap">
+              {item}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="h-[24px] px-[12px] flex items-center border-b border-tesco-border">
+        <span className="font-tesco text-[12px] leading-[16px] text-tesco-grey">
+          Please fill in this field.
+        </span>
+      </div>
     </div>
   )
 
