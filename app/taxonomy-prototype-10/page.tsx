@@ -5,7 +5,7 @@ import { graphqlRequest } from "@/lib/graphql-client"
 import type { GetTaxonomyResponse, GetCategoryProductsResponse, TaxonomyItem } from "@/types/tesco"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Terminal, Search, ShoppingCart, ChevronDown, Home, X } from "lucide-react"
+import { Terminal, Search, ShoppingCart, ChevronDown, ChevronRight, Home, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -435,35 +435,18 @@ export default function TaxonomyPrototype10Page() {
         </div>
       </div>
 
-      {/* Design System Styled Multi-level Flyout Menu */}
+      {/* Design System Styled Multi-level Flyout Menu - Appears Below Header */}
       {showAllDepartmentsMenu && (
         <div
-          className="fixed top-0 left-0 right-0 bottom-0 bg-white z-50 flex flex-col"
+          className="absolute top-full left-0 right-0 bg-white shadow-lg z-50"
           data-dropdown="all-departments"
           onMouseLeave={() => {
             setHoveredLevel1Id(null)
             setHoveredLevel2Id(null)
           }}
-          style={{ borderTopWidth: "4px", borderTopColor: "#007EB3" }}
+          style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}
         >
-          {/* Top Bar with Close Button */}
-          <div className="bg-white" style={{ borderBottomWidth: "1px", borderBottomColor: "#CCCCCC" }}>
-            <div className="flex items-center justify-between px-4 py-2">
-              <div />
-              <button
-                onClick={() => setShowAllDepartmentsMenu(false)}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <span className="font-bold text-sm" style={{ color: "#00539F" }}>Close</span>
-                <div className="flex items-center justify-center p-1 rounded-full border-2" style={{ borderColor: "#00539F" }}>
-                  <X className="h-4 w-4" style={{ color: "#00539F" }} />
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Main Content - Three Columns */}
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex" style={{ borderTopWidth: "4px", borderTopColor: "#007EB3" }}>
             {/* Level 1 Column */}
             <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px" }}>
               <div className="space-y-0">
@@ -485,7 +468,7 @@ export default function TaxonomyPrototype10Page() {
                   >
                     <span className="text-sm font-normal leading-5">{dept.name}</span>
                     {(dept.children?.length || 0) > 0 && (
-                      <ChevronDown
+                      <ChevronRight
                         className="h-4 w-4 flex-shrink-0"
                         style={{
                           color: hoveredLevel1Id === dept.id ? "white" : "#00539F",
@@ -499,7 +482,7 @@ export default function TaxonomyPrototype10Page() {
 
             {/* Level 2 Column */}
             {level2Items.length > 0 && (
-              <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px", borderRightWidth: "1px", borderRightColor: "#E5E5E5" }}>
+              <div className="bg-white overflow-y-auto flex-shrink-0" style={{ width: "256px", borderLeftWidth: "1px", borderLeftColor: "#E5E5E5" }}>
                 <div className="space-y-0">
                   {level2Items.map((item) => (
                     <button
@@ -516,7 +499,7 @@ export default function TaxonomyPrototype10Page() {
                     >
                       <span className="text-sm font-normal leading-5">{item.name}</span>
                       {(item.children?.length || 0) > 0 && (
-                        <ChevronDown
+                        <ChevronRight
                           className="h-4 w-4 flex-shrink-0"
                           style={{
                             color: hoveredLevel2Id === item.id ? "white" : "#00539F",
@@ -529,47 +512,37 @@ export default function TaxonomyPrototype10Page() {
               </div>
             )}
 
-            {/* Level 3 Column */}
-            <div className="flex-1 bg-white overflow-y-auto">
-              {level3Items.length > 0 ? (
-                <div className="p-3 space-y-1">
+            {/* Level 3 Column - Title Only */}
+            {level3Items.length > 0 && (
+              <div className="bg-white overflow-y-auto flex-shrink-0 flex-1" style={{ borderLeftWidth: "1px", borderLeftColor: "#E5E5E5", minWidth: "200px" }}>
+                <div className="space-y-0">
                   {level3Items.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleCategoryClick(item)}
-                      className="w-full flex items-start gap-3 px-3 py-2 rounded transition-colors"
-                      style={{ color: "#00539F" }}
+                      className="w-full text-left px-3 py-2 transition-colors text-sm font-normal leading-5"
+                      style={{
+                        backgroundColor: "white",
+                        color: "#00539F",
+                        borderBottomWidth: "1px",
+                        borderBottomColor: "#E5E5E5",
+                      }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F5F5F5")}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "white")}
                     >
-                      <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center">
-                        <img
-                          src={
-                            item.images?.[0]?.images?.[0]?.url ||
-                            "/placeholder.svg?height=48&width=48" ||
-                            "/placeholder.svg"
-                          }
-                          alt={item.name}
-                          width={48}
-                          height={48}
-                          className="object-contain"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=48&width=48"
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-normal truncate">{item.name}</p>
-                      </div>
+                      {item.name}
                     </button>
                   ))}
                 </div>
-              ) : hoveredLevel1Id !== null ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-gray-500 text-center text-sm">Select a category to browse</p>
-                </div>
-              ) : null}
-            </div>
+              </div>
+            )}
+
+            {/* Empty state when hovering level 1 */}
+            {level2Items.length === 0 && hoveredLevel1Id !== null && (
+              <div className="flex-1 bg-white flex items-center justify-center" style={{ borderLeftWidth: "1px", borderLeftColor: "#E5E5E5", minHeight: "200px" }}>
+                <p className="text-gray-500 text-center text-sm">Select a category to browse</p>
+              </div>
+            )}
           </div>
         </div>
       )}
